@@ -1,0 +1,53 @@
+<.header>
+  Relays
+  <:actions>
+    <.link patch={~p"/relays/new"}>
+      <.button>Add Relay</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.table
+  id="relays"
+  rows={@relays}
+  row_click={fn relay -> JS.navigate(~p"/relays/#{relay}") end}
+>
+  <:col :let={relay} label="Name">{relay.url}</:col>
+  <:col label="Status"> <span class="flex w-3 h-3 bg-green-500 rounded-full"></span></:col>
+  <:col :let={relay} label="Info">
+  <ul>
+  <%= for {k, v} <- relay.relay_info do %>
+    <%= if is_binary(v) and v != "" do %>
+      <li> <%= k <> ": " <> v %> </li>
+    <% end %>
+    <%= if is_list(v) do %>
+      <li> <%= k <> ": " <> Enum.join(v, ", ") %> </li>
+    <% end %>
+  <% end %>
+  </ul>
+  </:col>
+  <:action :let={relay}>
+    <div class="sr-only">
+      <.link navigate={~p"/relays/#{relay}"}>Show</.link>
+    </div>
+  </:action>
+  <:action :let={relay}>
+    <.link
+      phx-click={JS.push("delete", value: %{name: relay.url})# |> hide("##{id}")}
+      data-confirm="Are you sure?"
+    >
+      Disconnect
+    </.link>
+  </:action>
+</.table>
+
+<.modal :if={@live_action in [:new, :edit]} id="relay-modal" show on_cancel={JS.patch(~p"/relays")}>
+  <.live_component
+    module={MistWeb.RelayLive.FormComponent}
+    id={@relay.id || :new}
+    title={@page_title}
+    action={@live_action}
+    relay={@relay}
+    patch={~p"/relays"}
+  />
+</.modal>
