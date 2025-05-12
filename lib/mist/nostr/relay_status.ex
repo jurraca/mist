@@ -8,7 +8,7 @@ defmodule Mist.Nostr.RelayStatus do
     field :relay_name, :string
     field :connected?, :boolean
     field :url, :string
-    has_one :relay_info, Relay
+    embeds_one :relay_info, Relay
   end
 
 end
