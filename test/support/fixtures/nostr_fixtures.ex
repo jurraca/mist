@@ -25,4 +25,18 @@ defmodule Mist.NostrFixtures do
 
     relay
   end
+
+  @doc """
+  Generate a profile.
+  """
+  def profile_fixture(attrs \\ %{}) do
+    {:ok, profile} =
+      attrs
+      |> Enum.into(%{
+
+      })
+      |> Mist.Nostr.create_profile()
+
+    profile
+  end
 end

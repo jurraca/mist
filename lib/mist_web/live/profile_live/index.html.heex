@@ -1,0 +1,40 @@
+<.header>
+  Listing Profiles
+  <:actions>
+    <.link patch={~p"/profiles/new"}>
+      <.button>New Profile</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.table
+  id="profiles"
+  rows={@streams.profiles}
+  row_click={fn {_id, profile} -> JS.navigate(~p"/profiles/#{profile}") end}
+>
+  <:action :let={{_id, profile}}>
+    <div class="sr-only">
+      <.link navigate={~p"/profiles/#{profile}"}>Show</.link>
+    </div>
+    <.link patch={~p"/profiles/#{profile}/edit"}>Edit</.link>
+  </:action>
+  <:action :let={{id, profile}}>
+    <.link
+      phx-click={JS.push("delete", value: %{id: profile.id}) |> hide("##{id}")}
+      data-confirm="Are you sure?"
+    >
+      Delete
+    </.link>
+  </:action>
+</.table>
+
+<.modal :if={@live_action in [:new, :edit]} id="profile-modal" show on_cancel={JS.patch(~p"/profiles")}>
+  <.live_component
+    module={MistWeb.ProfileLive.FormComponent}
+    id={@profile.id || :new}
+    title={@page_title}
+    action={@live_action}
+    profile={@profile}
+    patch={~p"/profiles"}
+  />
+</.modal>

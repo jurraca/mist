@@ -4,7 +4,7 @@ defmodule Mist.NostrTest do
   alias Mist.Nostr
 
   describe "relays" do
-    alias Mist.Nostr.Relay
+    alias Mist.Relay
 
     import Mist.NostrFixtures
 
@@ -12,12 +12,12 @@ defmodule Mist.NostrTest do
 
     test "list_relays/0 returns all relays" do
       relay = relay_fixture()
-      assert Nostr.list_relays() == [relay]
+      assert Relay.list_relays() == [relay]
     end
 
     test "get_relay!/1 returns the relay with given id" do
       relay = relay_fixture()
-      assert Nostr.get_relay!(relay.id) == relay
+      assert Relay.get_relay!(relay.id) == relay
     end
 
     test "create_relay/1 with valid data creates a relay" do
@@ -43,7 +43,7 @@ defmodule Mist.NostrTest do
       relay = relay_fixture()
       update_attrs = %{name: "some updated name", version: "some updated version", description: "some updated description", banner: "some updated banner", icon: "some updated icon", pubkey: "some updated pubkey", contact: "some updated contact", supported_nips: [1], software: "some updated software"}
 
-      assert {:ok, %Relay{} = relay} = Nostr.update_relay(relay, update_attrs)
+      assert {:ok, %Relay.Relay{} = relay} = Relay.update_relay(relay, update_attrs)
       assert relay.name == "some updated name"
       assert relay.version == "some updated version"
       assert relay.description == "some updated description"
@@ -57,19 +57,71 @@ defmodule Mist.NostrTest do
 
     test "update_relay/2 with invalid data returns error changeset" do
       relay = relay_fixture()
-      assert {:error, %Ecto.Changeset{}} = Nostr.update_relay(relay, @invalid_attrs)
-      assert relay == Nostr.get_relay!(relay.id)
+      assert {:error, %Ecto.Changeset{}} = Relay.update_relay(relay, @invalid_attrs)
+      assert relay == Relay.get_relay!(relay.id)
     end
 
     test "delete_relay/1 deletes the relay" do
       relay = relay_fixture()
-      assert {:ok, %Relay{}} = Nostr.delete_relay(relay)
+      assert {:ok, %Relay.Relay{}} = Relay.delete_relay(relay)
       assert_raise Ecto.NoResultsError, fn -> Nostr.get_relay!(relay.id) end
     end
 
     test "change_relay/1 returns a relay changeset" do
       relay = relay_fixture()
-      assert %Ecto.Changeset{} = Nostr.change_relay(relay)
+      assert %Ecto.Changeset{} = Relay.change_relay(relay)
+    end
+  end
+
+  describe "profiles" do
+    alias Mist.Profile
+
+    import Mist.NostrFixtures
+
+    @invalid_attrs %{}
+
+    test "list_profiles/0 returns all profiles" do
+      profile = profile_fixture()
+      assert Profile.list_profiles() == [profile]
+    end
+
+    test "get_profile!/1 returns the profile with given id" do
+      profile = profile_fixture()
+      assert Profile.get_profile!(profile.id) == profile
+    end
+
+    test "create_profile/1 with valid data creates a profile" do
+      valid_attrs = %{}
+
+      assert {:ok, %Profile.Profile{} = profile} = Nostr.create_profile(valid_attrs)
+    end
+
+    test "create_profile/1 with invalid data returns error changeset" do
+      assert {:error, %Ecto.Changeset{}} = Profile.create_profile(@invalid_attrs)
+    end
+
+    test "update_profile/2 with valid data updates the profile" do
+      profile = profile_fixture()
+      update_attrs = %{}
+
+      assert {:ok, %Profile{} = profile} = Profile.update_profile(profile, update_attrs)
+    end
+
+    test "update_profile/2 with invalid data returns error changeset" do
+      profile = profile_fixture()
+      assert {:error, %Ecto.Changeset{}} = Profile.update_profile(profile, @invalid_attrs)
+      assert profile == Profile.get_profile!(profile.id)
+    end
+
+    test "delete_profile/1 deletes the profile" do
+      profile = profile_fixture()
+      assert {:ok, %Profile{}} = Profile.delete_profile(profile)
+      assert_raise Ecto.NoResultsError, fn -> Profile.get_profile!(profile.id) end
+    end
+
+    test "change_profile/1 returns a profile changeset" do
+      profile = profile_fixture()
+      assert %Ecto.Changeset{} = Profile.change_profile(profile)
     end
   end
 end
