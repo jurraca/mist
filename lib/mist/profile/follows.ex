@@ -1,4 +1,4 @@
-defmodule Mist.Nostr.Follows do
+defmodule Mist.Profile.Follows do
   use Ecto.Schema
   import Ecto.Changeset
 

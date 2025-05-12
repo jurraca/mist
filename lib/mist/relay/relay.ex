@@ -1,4 +1,4 @@
-defmodule Mist.Nostr.Relay do
+defmodule Mist.Relay.Relay do
   use Ecto.Schema
   import Ecto.Changeset
 

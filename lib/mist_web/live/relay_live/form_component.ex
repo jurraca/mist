@@ -1,7 +1,7 @@
 defmodule MistWeb.RelayLive.FormComponent do
   use MistWeb, :live_component
 
-  alias Mist.Nostr
+  alias Mist.Relay
 
   @impl true
   def render(assigns) do
@@ -33,20 +33,20 @@ defmodule MistWeb.RelayLive.FormComponent do
      socket
      |> assign(assigns)
      |> assign_new(:form, fn ->
-       to_form(Nostr.change_relay(relay))
+       to_form(Relay.change_relay(relay))
      end)}
   end
 
   @impl true
   def handle_event("validate", %{"relay" => relay_params}, socket) do
-    changeset = Nostr.change_relay(socket.assigns.relay, relay_params)
+    changeset = Relay.change_relay(socket.assigns.relay, relay_params)
     {:noreply, assign(socket, form: to_form(changeset, action: :validate))}
   end
 
   def handle_event("save", %{"relay" => %{"url" => url}}, socket) do
     case Nostrbase.add_relay(url) do
       {:ok, _pid} ->
-        {:ok, relay} = Nostr.create_relay(%{name: url})
+        {:ok, relay} = Relay.create_relay(%{name: url})
         notify_parent({:saved, relay})
 
         {:noreply,

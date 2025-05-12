@@ -1,12 +1,12 @@
-defmodule Mist.Nostr do
+defmodule Mist.Relay do
   @moduledoc """
-  The Nostr context.
+  The Relay context.
   """
 
   import Ecto.Query, warn: false
   alias Mist.Repo
 
-  alias Mist.Nostr.Relay
+  alias Mist.Relay.Relay
 
   @doc """
   Returns the list of relays.

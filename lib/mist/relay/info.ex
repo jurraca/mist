@@ -1,4 +1,4 @@
-defmodule Mist.Nostr.RelayInfo do
+defmodule Mist.Relay.Info do
 
 
    def get("wss" <> rest), do: get("https" <> rest)

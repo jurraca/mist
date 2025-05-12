@@ -1,4 +1,4 @@
-defmodule Mist.Nostr.Profile do
+defmodule Mist.Profile.Profile do
   use Ecto.Schema
   import Ecto.Changeset
 
