@@ -18,7 +18,7 @@ defmodule MistWeb.RelayLive.Index do
     relays = RelayManager.get_states()
       |> Enum.with_index(fn x, i ->
           case Relay.Info.get(x.url) do
-            {:ok, info} -> Map.merge(%Relay.Status{id: i, relay_info: info}, x) |> dbg()
+            {:ok, info} -> Map.merge(%Relay.Status{id: i, relay_info: info}, x)
             {:error, _reason} -> Map.merge(%Relay.Status{id: i, relay_info: "not available"}, x)
           end
         end)
