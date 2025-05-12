@@ -47,9 +47,9 @@ defmodule Mist.Nostr.NIP19 do
 
   def parse_field(<<1, len::8, rest::binary>>, acc) do
     {relay_url, rest} = slice_bit_length(rest, len)
-    acc = case :relay in Map.keys(acc) do
-        false -> Map.put(acc, :relay, relay_url)
-        true -> Map.update(acc, :relay, [], fn v -> [v] ++ [relay_url] end)
+    acc = case :relays in Map.keys(acc) do
+        false -> Map.put(acc, :relays, [relay_url])
+        true -> Map.update(acc, :relays, [], fn v -> [v] ++ [relay_url] end)
         end
     parse_field(rest, acc)
   end

@@ -8,13 +8,15 @@
 </.header>
 
 <.form for={@nprofile_form} phx-submit="parse_nprofile">
-  <.input type="text" field={@nprofile_form[:nprofile]} placeholder="Enter nprofile..." />
+  <.input type="text" field={@nprofile_form[:nprofile]} placeholder="Enter nprofile, npub, or hex pubkey..." />
   <.button type="submit">Parse</.button>
 </.form>
 
 <div :if={@parsed_profile}>
   <p>Pubkey: <%= @parsed_profile.pubkey %></p>
-  <p>Relays: <%= Enum.join(@parsed_profile.relay || [], ", ") %></p>
+  <p>Npub: <%= @parsed_profile.npub%></p>
+  <p :if={@parsed_profile.relays !== []}>Relays: {@parsed_profile.relays}</p>
+  <p :if={@parsed_profile.relays == []}> No relays were supplied to find this pubkey.</p>
 </div>
 
 <.table

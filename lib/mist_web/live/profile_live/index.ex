@@ -13,13 +13,42 @@ defmodule MistWeb.ProfileLive.Index do
   end
 
   @impl true
-  def handle_event("parse_nprofile", %{"nprofile" => nprofile}, socket) do
-    case Mist.Nostr.NIP19.parse(nprofile) do
-      {:ok, profile_data} ->
-        {:noreply, assign(socket, :parsed_profile, profile_data)}
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Invalid nprofile format")}
+  def handle_event("parse_nprofile", %{"nprofile" => input}, socket) do
+    case parse_identifier(input) do
+      {:ok, %{pubkey: pubkey, relays: relays} = profile_data} ->
+        npub = Nostr.Bech32.hex_to_npub(pubkey)
+        relays_str = Enum.join(relays, ", ")
+        profile = profile_data
+        |> Map.put(:npub, npub)
+        |> Map.put(:relays, relays_str)
+        
+        {:noreply, assign(socket, :parsed_profile, profile)}
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, reason)}
     end
+  end
+
+  defp parse_identifier("nprofile" <> _rest = input) do
+    Mist.Nostr.NIP19.parse(input)
+  end
+
+  defp parse_identifier("npub" <> _rest = input) do
+    case Nostr.Bech32.npub_to_hex(input) do
+      pubkey when is_binary(pubkey) ->
+        {:ok, %{pubkey: pubkey, npub: input, relays: []}}
+      _ ->
+        {:error, "Invalid npub format"}
+    end
+  end
+
+  defp parse_identifier(input) when byte_size(input) == 64 do
+    # Assume raw hex pubkey if 64 chars
+    npub = Nostr.Bech32.hex_to_npub(input) 
+    {:ok, %{pubkey: input, npub: npub, relays: []}}
+  end
+
+  defp parse_identifier(_) do
+    {:error, "Invalid format - please provide nprofile, npub, or hex pubkey"}
   end
 
   @impl true
