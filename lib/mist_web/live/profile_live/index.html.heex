@@ -12,11 +12,12 @@
   rows={@streams.profiles}
   row_click={fn {_id, profile} -> JS.navigate(~p"/profiles/#{profile}") end}
 >
+  <:col :let={{_id, profile}} label="name"> {profile.name} </:col>
+  <:col :let={{_id, profile}} label="pubkey"> {profile.npub} </:col>
   <:action :let={{_id, profile}}>
     <div class="sr-only">
       <.link navigate={~p"/profiles/#{profile}"}>Show</.link>
     </div>
-    <.link patch={~p"/profiles/#{profile}/edit"}>Edit</.link>
   </:action>
   <:action :let={{id, profile}}>
     <.link

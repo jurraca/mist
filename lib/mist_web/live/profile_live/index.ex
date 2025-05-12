@@ -28,7 +28,7 @@ defmodule MistWeb.ProfileLive.Index do
   defp apply_action(socket, :index, _params) do
     socket
     |> assign(:page_title, "Listing Profiles")
-    |> assign(:profile, nil)
+    |> assign(:profiles, [])
   end
 
   @impl true

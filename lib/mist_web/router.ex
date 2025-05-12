@@ -20,6 +20,9 @@ defmodule MistWeb.Router do
     get "/", PageController, :home
     live "/relays", RelayLive.Index, :index
     live "/relays/new", RelayLive.Index, :new
+    live "/profiles", ProfileLive.Index, :index
+    live "/profiles/new", ProfileLive.Index, :new
+    live "/profiles/:id", ProfileLive.Index, :show
   end
 
   # Other scopes may use custom stacks.
