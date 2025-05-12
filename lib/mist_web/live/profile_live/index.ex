@@ -5,7 +5,21 @@ defmodule MistWeb.ProfileLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :profiles, Profile.list_profiles())}
+    {:ok, 
+      socket
+      |> stream(:profiles, Profile.list_profiles())
+      |> assign(:nprofile_form, to_form(%{"nprofile" => ""}))
+      |> assign(:parsed_profile, nil)}
+  end
+
+  @impl true
+  def handle_event("parse_nprofile", %{"nprofile" => nprofile}, socket) do
+    case Mist.Nostr.NIP19.parse(nprofile) do
+      {:ok, profile_data} ->
+        {:noreply, assign(socket, :parsed_profile, profile_data)}
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Invalid nprofile format")}
+    end
   end
 
   @impl true

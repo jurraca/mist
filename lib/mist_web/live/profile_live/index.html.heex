@@ -7,6 +7,16 @@
   </:actions>
 </.header>
 
+<.form for={@nprofile_form} phx-submit="parse_nprofile">
+  <.input type="text" field={@nprofile_form[:nprofile]} placeholder="Enter nprofile..." />
+  <.button type="submit">Parse</.button>
+</.form>
+
+<div :if={@parsed_profile}>
+  <p>Pubkey: <%= @parsed_profile.pubkey %></p>
+  <p>Relays: <%= Enum.join(@parsed_profile.relay || [], ", ") %></p>
+</div>
+
 <.table
   id="profiles"
   rows={@streams.profiles}
