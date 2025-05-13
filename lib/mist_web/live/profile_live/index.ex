@@ -5,50 +5,74 @@ defmodule MistWeb.ProfileLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, 
-      socket
-      |> stream(:profiles, Profile.list_profiles())
-      |> assign(:nprofile_form, to_form(%{"nprofile" => ""}))
-      |> assign(:parsed_profile, nil)}
+    {:ok,
+     socket
+     |> stream(:profiles, Profile.list_profiles())
+     |> assign(:nprofile_form, to_form(%{"nprofile" => ""}))
+     |> assign(:parsed_profile, nil)}
   end
 
   @impl true
-  def handle_event("parse_nprofile", %{"nprofile" => input}, socket) do
-    case parse_identifier(input) do
-      {:ok, %{pubkey: pubkey, relays: relays} = profile_data} ->
-        npub = Nostr.Bech32.hex_to_npub(pubkey)
-        relays_str = Enum.join(relays, ", ")
-        profile = profile_data
-        |> Map.put(:npub, npub)
-        |> Map.put(:relays, relays_str)
-        
-        {:noreply, assign(socket, :parsed_profile, profile)}
+  def handle_event("search", %{"search_term" => input}, socket) do
+    with {:ok, profile_data} <- parse_identifier(input) do
+      npub = Nostr.Bech32.hex_to_npub(profile_data.pubkey)
+
+      case search(profile_data) |> dbg() do
+        {:ok, profile, :local} ->
+          {:noreply, assign(socket, :parsed_profile, profile)}
+
+        {:ok, %{pubkey: pubkey, relays: relays}} when relays != [] ->
+          {:noreply,
+           assign(socket, :parsed_profile, %{
+             pubkey: pubkey,
+             npub: npub,
+             relays: Enum.join(relays, ", ")
+          })}
+
+        {:ok, %{pubkey: pubkey}} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Profile exists but no relays specified to fetch data")
+           |> assign(:parsed_profile, %{pubkey: pubkey, npub: npub, relays: []})}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, reason)}
+      end
+    else
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, reason)}
     end
   end
 
-  defp parse_identifier("nprofile" <> _rest = input) do
-    Mist.Nostr.NIP19.parse(input)
+  @impl true
+  def handle_event("delete", %{"id" => id}, socket) do
+    profile = Profile.get_profile!(id)
+    {:ok, _} = Profile.delete_profile(profile)
+
+    {:noreply, stream_delete(socket, :profiles, profile)}
   end
 
-  defp parse_identifier("npub" <> _rest = input) do
-    case Nostr.Bech32.npub_to_hex(input) do
-      pubkey when is_binary(pubkey) ->
-        {:ok, %{pubkey: pubkey, npub: input, relays: []}}
-      _ ->
-        {:error, "Invalid npub format"}
+  defp search(%{pubkey: _pubkey, relays: []} = data), do: {:ok, data}
+
+  defp search(%{pubkey: pubkey, relays: relays} = profile_data) when relays != [] do
+    case find_local_profile(profile_data.pubkey) do
+      {:ok, profile} -> {:ok, profile, :local}
+      {:error, :not_found} ->
+        case Profile.sub_via_relays(pubkey, relays) do
+          {:ok, sub_id} ->
+            Nostrbase.listen_for_sub(sub_id)
+            {:ok, profile_data}
+          err -> err
+        end
+      error -> error
     end
   end
 
-  defp parse_identifier(input) when byte_size(input) == 64 do
-    # Assume raw hex pubkey if 64 chars
-    npub = Nostr.Bech32.hex_to_npub(input) 
-    {:ok, %{pubkey: input, npub: npub, relays: []}}
-  end
-
-  defp parse_identifier(_) do
-    {:error, "Invalid format - please provide nprofile, npub, or hex pubkey"}
+  defp find_local_profile(pubkey) do
+    case Profile.get_by_pubkey(pubkey) do
+      nil -> {:error, :not_found}
+      profile -> {:ok, profile}
+    end
   end
 
   @impl true
@@ -70,7 +94,7 @@ defmodule MistWeb.ProfileLive.Index do
 
   defp apply_action(socket, :index, _params) do
     socket
-    |> assign(:page_title, "Listing Profiles")
+    |> assign(:page_title, "Profiles")
     |> assign(:profiles, [])
   end
 
@@ -80,10 +104,32 @@ defmodule MistWeb.ProfileLive.Index do
   end
 
   @impl true
-  def handle_event("delete", %{"id" => id}, socket) do
-    profile = Profile.get_profile!(id)
-    {:ok, _} = Profile.delete_profile(profile)
+  def handle_info(msg, socket) do
+      dbg(msg)
+     {:noreply, socket}
+  end
 
-    {:noreply, stream_delete(socket, :profiles, profile)}
+  defp parse_identifier("nprofile" <> _rest = input) do
+    Mist.Nostr.NIP19.parse(input)
+  end
+
+  defp parse_identifier("npub" <> _rest = input) do
+    case Nostr.Bech32.npub_to_hex(input) do
+      pubkey when is_binary(pubkey) ->
+        {:ok, %{pubkey: pubkey, npub: input, relays: []}}
+
+      _ ->
+        {:error, "Invalid npub format"}
+    end
+  end
+
+  defp parse_identifier(input) when byte_size(input) == 64 do
+    # Assume raw hex pubkey if 64 chars
+    npub = Nostr.Bech32.hex_to_npub(input)
+    {:ok, %{pubkey: input, npub: npub, relays: []}}
+  end
+
+  defp parse_identifier(_) do
+    {:error, "Invalid format - please provide nprofile, npub, or hex pubkey"}
   end
 end

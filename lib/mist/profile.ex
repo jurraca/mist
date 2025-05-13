@@ -55,6 +55,19 @@ defmodule Mist.Profile do
     |> Repo.insert()
   end
 
+  def get_by_pubkey(pubkey) do
+    Repo.get_by(Profile, pubkey: pubkey)
+  end
+
+  def sub_via_relays(pubkey, relays) do
+    case relays
+      |> Enum.map(&Nostrbase.add_relay/1)
+      |> Mist.Utils.collect() do
+        {:ok, _} -> Nostrbase.subscribe_profile(pubkey, send_via: relays)
+        {:error, _} = err -> err
+    end
+  end
+
   @doc """
   Updates a profile.
 

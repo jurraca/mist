@@ -1,15 +1,8 @@
-<.header>
-  Listing Profiles
-  <:actions>
-    <.link patch={~p"/profiles/new"}>
-      <.button>New Profile</.button>
-    </.link>
-  </:actions>
-</.header>
+<.header>Profiles</.header>
 
-<.form for={@nprofile_form} phx-submit="parse_nprofile">
-  <.input type="text" field={@nprofile_form[:nprofile]} placeholder="Enter nprofile, npub, or hex pubkey..." />
-  <.button type="submit">Parse</.button>
+<.form for={@nprofile_form} phx-submit="search">
+  <.input type="text" field={@nprofile_form[:search_term]} placeholder="Enter nprofile, npub, or hex pubkey..." />
+  <.button type="submit">Search</.button>
 </.form>
 
 <div :if={@parsed_profile}>
