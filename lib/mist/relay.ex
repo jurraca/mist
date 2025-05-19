@@ -21,6 +21,31 @@ defmodule Mist.Relay do
     Repo.all(Relay)
   end
 
+  def maybe_connect_relays(relay_list) do
+    {connected, not_connected} = connected(relay_list)
+
+    if not_connected != [] do
+      connect_relays(not_connected)
+    else
+      {:ok, connected}
+    end
+  end
+
+  def connect_relays(relay_list) when is_list(relay_list) do
+    relay_list
+    |> Enum.map(fn relay_url -> Task.async(fn -> Nostrbase.add_relay(relay_url) end) end)
+    |> Task.yield_many(timeout: 3_000)
+    |> Enum.map(fn {task, output} ->
+      output || Task.ignore(task)
+    end)
+    |> Mist.Utils.collect()
+  end
+
+  def connected(relay_list) do
+    registered = Nostrbase.RelayManager.registered_names()
+    Enum.split_with(relay_list, fn relay -> relay in registered end)
+  end
+
   @doc """
   Gets a single relay.
 

@@ -7,6 +7,7 @@ defmodule Mist.Profile do
   alias Mist.Repo
 
   alias Mist.Profile.Profile
+  alias Mist.Relay
 
   @doc """
   Returns the list of profiles.
@@ -60,11 +61,13 @@ defmodule Mist.Profile do
   end
 
   def sub_via_relays(pubkey, relays) do
-    case relays
-      |> Enum.map(&Nostrbase.add_relay/1)
-      |> Mist.Utils.collect() do
-        {:ok, _} -> Nostrbase.subscribe_profile(pubkey, send_via: relays)
-        {:error, _} = err -> err
+    with {:ok, _} <- Relay.maybe_connect_relays(relays) do
+      Nostrbase.subscribe_profile(pubkey, send_via: relays)
+    else
+      {:error, _} ->
+        {connected, _} = Relay.connected(relays)
+        Nostrbase.subscribe_profile(pubkey, send_via: connected)
+      err -> err
     end
   end
 
