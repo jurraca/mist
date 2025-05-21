@@ -2,9 +2,12 @@ defmodule MistWeb.ProfileLive.Index do
   use MistWeb, :live_view
 
   alias Mist.Profile
+  alias Mist.Nostr.NIP19
+  alias Nostr.{Bech32, Event}
 
   @impl true
   def mount(_params, _session, socket) do
+    MistWeb.Endpoint.subscribe("profiles")
     {:ok,
      socket
      |> stream(:profiles, Profile.list_profiles())
@@ -13,11 +16,16 @@ defmodule MistWeb.ProfileLive.Index do
   end
 
   @impl true
+  def handle_event("search", %{"search_term" => ""}, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("search", %{"search_term" => input}, socket) do
     with {:ok, profile_data} <- parse_identifier(input) do
-      npub = Nostr.Bech32.hex_to_npub(profile_data.pubkey)
+      npub = Bech32.hex_to_npub(profile_data.pubkey)
 
-      case search(profile_data) |> dbg() do
+      case search(profile_data) do
         {:ok, profile, :local} ->
           {:noreply, assign(socket, :parsed_profile, profile)}
 
@@ -59,8 +67,7 @@ defmodule MistWeb.ProfileLive.Index do
       {:ok, profile} -> {:ok, profile, :local}
       {:error, :not_found} ->
         case Profile.sub_via_relays(pubkey, relays) do
-          {:ok, sub_id} ->
-            Nostrbase.listen_for_sub(sub_id)
+          :ok ->
             {:ok, profile_data}
           err -> err
         end
@@ -104,17 +111,22 @@ defmodule MistWeb.ProfileLive.Index do
   end
 
   @impl true
+  def handle_info(%Event{} = event, socket) do
+    {:noreply, stream_insert(socket, :profiles, %{id: event.id, profile: event.content})}
+  end
+
+  @impl true
   def handle_info(msg, socket) do
       dbg(msg)
      {:noreply, socket}
   end
 
   defp parse_identifier("nprofile" <> _rest = input) do
-    Mist.Nostr.NIP19.parse(input)
+    NIP19.parse(input)
   end
 
   defp parse_identifier("npub" <> _rest = input) do
-    case Nostr.Bech32.npub_to_hex(input) do
+    case Bech32.npub_to_hex(input) do
       pubkey when is_binary(pubkey) ->
         {:ok, %{pubkey: pubkey, npub: input, relays: []}}
 
@@ -125,7 +137,7 @@ defmodule MistWeb.ProfileLive.Index do
 
   defp parse_identifier(input) when byte_size(input) == 64 do
     # Assume raw hex pubkey if 64 chars
-    npub = Nostr.Bech32.hex_to_npub(input)
+    npub = Bech32.hex_to_npub(input)
     {:ok, %{pubkey: input, npub: npub, relays: []}}
   end
 

@@ -12,9 +12,7 @@ defmodule Mist.Application do
       Mist.Repo,
       {DNSCluster, query: Application.get_env(:mist, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Mist.PubSub},
-      # Start a worker by calling: Mist.Worker.start_link(arg)
-      # {Mist.Worker, arg},
-      # Start to serve requests, typically the last entry
+      Mist.Nostr.Dispatcher,
       MistWeb.Endpoint
     ]
 

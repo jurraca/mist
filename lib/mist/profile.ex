@@ -6,6 +6,7 @@ defmodule Mist.Profile do
   import Ecto.Query, warn: false
   alias Mist.Repo
 
+  alias Mist.Nostr.Dispatcher
   alias Mist.Profile.Profile
   alias Mist.Relay
 
@@ -60,13 +61,13 @@ defmodule Mist.Profile do
     Repo.get_by(Profile, pubkey: pubkey)
   end
 
-  def sub_via_relays(pubkey, relays) do
-    with {:ok, _} <- Relay.maybe_connect_relays(relays) do
-      Nostrbase.subscribe_profile(pubkey, send_via: relays)
+  def sub_via_relays(pubkey, [ h | _ ] = relays) do
+    with {:ok, _} <- Relay.maybe_connect_relays([h]) do
+      Dispatcher.subscribe_profile(pubkey, send_via: [h])
     else
       {:error, _} ->
         {connected, _} = Relay.connected(relays)
-        Nostrbase.subscribe_profile(pubkey, send_via: connected)
+        Dispatcher.subscribe_profile(pubkey, send_via: connected)
       err -> err
     end
   end
