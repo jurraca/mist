@@ -25,7 +25,10 @@ defmodule Mist.Relay do
     {connected, not_connected} = connected(relay_list)
 
     if not_connected != [] do
-      connect_relays(not_connected)
+      case connect_relays(not_connected) do
+         {:ok, _} -> {:ok, relay_list}
+         {:error, reason} -> {:error, "could not connect to #{Enum.join(reason, ", ")}"}
+      end
     else
       {:ok, connected}
     end
