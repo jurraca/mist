@@ -6,26 +6,36 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :relays, [])}
+    relay_states = RelayManager.get_states()
+    |> Enum.map(fn state -> 
+      %Relay.Status{id: state.url, relay_info: %{"status" => "loading"}, url: state.url}
+    end)
+
+    socket = socket
+    |> stream(:relays, relay_states)
+    |> assign(:page_title, "Listing Relays")
+
+    # Fetch relay info asynchronously for each relay
+    for state <- relay_states do
+      send(self(), {:fetch_relay_info, state})
+    end
+
+    {:ok, socket}
+  end
+
+  @impl true
+  def handle_info({:fetch_relay_info, state}, socket) do
+    case Relay.Info.get(state.url) do
+      {:ok, info} -> 
+        {:noreply, stream_insert(socket, :relays, %{state | relay_info: info})}
+      {:error, _reason} -> 
+        {:noreply, stream_insert(socket, :relays, %{state | relay_info: %{"status" => "unavailable"}})}
+    end
   end
 
   @impl true
   def handle_params(params, _url, socket) do
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
-  end
-
-  defp apply_action(socket, :index, _params) do
-    relays = RelayManager.get_states()
-      |> Enum.with_index(fn x, i ->
-          case Relay.Info.get(x.url) do
-            {:ok, info} -> Map.merge(%Relay.Status{id: i, relay_info: info}, x)
-            {:error, _reason} -> Map.merge(%Relay.Status{id: i, relay_info: "not available"}, x)
-          end
-        end)
-
-    socket
-    |> assign(:page_title, "Listing Relays")
-    |> assign(:relays, relays)
+    {:noreply, socket}
   end
 
   defp apply_action(socket, :edit, %{"id" => id}) do
