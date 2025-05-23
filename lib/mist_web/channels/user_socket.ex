@@ -11,6 +11,8 @@ defmodule MistWeb.UserSocket do
   # pointing to the `MistWeb.RoomChannel`:
   #
   channel "profiles", MistWeb.ProfilesChannel
+  channel "notes", MistWeb.NotesChannel
+
   #
   # To create a channel file, use the mix task:
   #
