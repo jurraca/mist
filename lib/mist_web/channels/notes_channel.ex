@@ -2,7 +2,7 @@ defmodule MistWeb.NotesChannel do
   use MistWeb, :channel
 
   @impl true
-  def join("notes", payload, socket) do
+  def join("notes", pubkey, socket) do
     Dispatcher.subscribe_notes(pubkey)
     {:ok, socket}
   end
