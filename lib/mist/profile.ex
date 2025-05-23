@@ -106,6 +106,25 @@ defmodule Mist.Profile do
     Repo.delete(profile)
   end
 
+  def store_follows(pubkey, followed_pubkeys) do
+    with {:ok, profile} <- get_or_create_profile(pubkey) do
+      followed_profiles = Enum.map(followed_pubkeys, &get_or_create_profile/1)
+      
+      profile
+      |> Repo.preload(:following)
+      |> Profile.changeset(%{})
+      |> Ecto.Changeset.put_assoc(:following, followed_profiles)
+      |> Repo.update()
+    end
+  end
+
+  defp get_or_create_profile(pubkey) do
+    case get_by_pubkey(pubkey) do
+      nil -> create_profile(%{pubkey: pubkey})
+      profile -> {:ok, profile}
+    end
+  end
+
   @doc """
   Returns an `%Ecto.Changeset{}` for tracking profile changes.
 
