@@ -2,6 +2,11 @@
 <div class="mx-auto max-w-2xl">
   <.header>
     Notes
+    <:actions>
+      <.link patch={~p"/notes/new"}>
+        <.button>New Note</.button>
+      </.link>
+    </:actions>
   </.header>
 
   <div class="mt-8">
@@ -22,3 +27,14 @@
     </div>
   </div>
 </div>
+
+<.modal :if={@live_action in [:new]} id="note-modal" show on_cancel={JS.patch(~p"/notes")}>
+  <.live_component
+    module={MistWeb.NoteLive.FormComponent}
+    id={:new}
+    title={@page_title}
+    action={@live_action}
+    note={%Event{}}
+    patch={~p"/notes"}
+  />
+</.modal>
