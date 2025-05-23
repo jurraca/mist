@@ -3,7 +3,8 @@ defmodule MistWeb.NotesChannel do
 
   @impl true
   def join("notes", payload, socket) do
-      {:ok, socket}
+    Dispatcher.subscribe_notes(pubkey)
+    {:ok, socket}
   end
 
   # Channels can be used in a request/response fashion
@@ -18,6 +19,12 @@ defmodule MistWeb.NotesChannel do
   @impl true
   def handle_in("shout", payload, socket) do
     broadcast(socket, "shout", payload)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(event, socket) do
+    broadcast!(socket, "notes", event)
     {:noreply, socket}
   end
 end
