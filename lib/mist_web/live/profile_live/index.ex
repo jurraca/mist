@@ -8,14 +8,13 @@ defmodule MistWeb.ProfileLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(Mist.PubSub, "profiles")
-    end
 
     {:ok,
      socket
      |> stream(:profiles, Profile.list_profiles())
      |> assign(:search_form, to_form(%{"search_term" => ""}))
      |> assign(:parsed_profile, nil)}
+    end
   end
 
   @impl true
