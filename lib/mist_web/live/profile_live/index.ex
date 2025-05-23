@@ -70,8 +70,13 @@ defmodule MistWeb.ProfileLive.Index do
       name: Map.get(event.content, "name", "Unknown"),
       about: Map.get(event.content, "about", ""),
       picture: Map.get(event.content, "picture", ""),
-      npub: Bech32.hex_to_npub(event.pubkey)
+      banner: Map.get(event.content, "banner")
     }
+
+    case :elixir_json.decode(event.content) do
+      {:ok, attrs} ->  Profile.create_profile(attrs)
+      {:error, reason} -> {:error, reason}
+    end
 
     {:noreply, stream_insert(socket, :profiles, profile)}
   end
