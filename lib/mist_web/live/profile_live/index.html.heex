@@ -1,46 +1,38 @@
-<.header>Profiles</.header>
 
-<.form for={@nprofile_form} phx-submit="search">
-  <.input type="text" field={@nprofile_form[:search_term]} placeholder="Enter nprofile, npub, or hex pubkey..." />
-  <.button type="submit">Search</.button>
-</.form>
+<div class="mx-auto max-w-2xl">
+  <.header>
+    Profiles
+  </.header>
 
-<div :if={@parsed_profile}>
-  <p>Pubkey: <%= @parsed_profile.pubkey %></p>
-  <p>Npub: <%= @parsed_profile.npub%></p>
-  <p :if={@parsed_profile.relays !== []}>Relays: {@parsed_profile.relays}</p>
-  <p :if={@parsed_profile.relays == []}> No relays were supplied to find this pubkey.</p>
-</div>
+  <.form for={@search_form} phx-submit="search" class="mt-4">
+    <.input type="text" field={@search_form[:search_term]} placeholder="Enter nprofile, npub, or hex pubkey..." />
+    <.button type="submit" class="mt-2">Search</.button>
+  </.form>
 
-<.table
-  id="profiles"
-  rows={@streams.profiles}
-  row_click={fn {_id, profile} -> JS.navigate(~p"/profiles/#{profile}") end}
->
-  <:col :let={{_id, profile}} label="name"> {profile.name} </:col>
-  <:col :let={{_id, profile}} label="pubkey"> {profile.npub} </:col>
-  <:action :let={{_id, profile}}>
-    <div class="sr-only">
-      <.link navigate={~p"/profiles/#{profile}"}>Show</.link>
+  <div :if={@parsed_profile} class="mt-4 p-4 bg-gray-50 rounded-lg">
+    <h3 class="text-lg font-semibold">Search Result</h3>
+    <p class="mt-2"><span class="font-medium">Pubkey:</span> <%= @parsed_profile.pubkey %></p>
+    <p class="mt-1"><span class="font-medium">Npub:</span> <%= @parsed_profile.npub%></p>
+    <p :if={@parsed_profile.relays != []} class="mt-1">
+      <span class="font-medium">Relays:</span> <%= @parsed_profile.relays %>
+    </p>
+  </div>
+
+  <div class="mt-8">
+    <h2 class="text-lg font-semibold mb-4">Profiles you follow</h2>
+    <div id="profiles" phx-update="stream" class="space-y-4">
+      <div :for={{id, profile} <- @streams.profiles} id={id} class="p-4 bg-white shadow rounded-lg">
+        <div class="flex items-center gap-4">
+          <div :if={profile.picture} class="w-12 h-12">
+            <img src={profile.picture} class="w-full h-full rounded-full object-cover" alt={profile.name}/>
+          </div>
+          <div class="flex-1">
+            <h3 class="font-medium"><%= profile.name %></h3>
+            <p class="text-sm text-gray-500 break-all"><%= profile.npub %></p>
+            <p :if={profile.about} class="mt-2 text-sm"><%= profile.about %></p>
+          </div>
+        </div>
+      </div>
     </div>
-  </:action>
-  <:action :let={{id, profile}}>
-    <.link
-      phx-click={JS.push("delete", value: %{id: profile.id}) |> hide("##{id}")}
-      data-confirm="Are you sure?"
-    >
-      Delete
-    </.link>
-  </:action>
-</.table>
-
-<.modal :if={@live_action in [:new, :edit]} id="profile-modal" show on_cancel={JS.patch(~p"/profiles")}>
-  <.live_component
-    module={MistWeb.ProfileLive.FormComponent}
-    id={@profile.id || :new}
-    title={@page_title}
-    action={@live_action}
-    profile={@profile}
-    patch={~p"/profiles"}
-  />
-</.modal>
+  </div>
+</div>

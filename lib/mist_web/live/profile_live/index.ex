@@ -7,11 +7,14 @@ defmodule MistWeb.ProfileLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    MistWeb.Endpoint.subscribe("profiles")
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Mist.PubSub, "profiles")
+    end
+
     {:ok,
      socket
      |> stream(:profiles, Profile.list_profiles())
-     |> assign(:nprofile_form, to_form(%{"nprofile" => ""}))
+     |> assign(:search_form, to_form(%{"search_term" => ""}))
      |> assign(:parsed_profile, nil)}
   end
 
@@ -35,7 +38,7 @@ defmodule MistWeb.ProfileLive.Index do
              pubkey: pubkey,
              npub: npub,
              relays: Enum.join(relays, ", ")
-          })}
+           })}
 
         {:ok, %{pubkey: pubkey}} ->
           {:noreply,
@@ -60,20 +63,36 @@ defmodule MistWeb.ProfileLive.Index do
     {:noreply, stream_delete(socket, :profiles, profile)}
   end
 
-  defp search(%{pubkey: _pubkey, relays: []} = data), do: {:ok, data}
+  @impl true
+  def handle_info(%Event{kind: 0} = event, socket) do
+    profile = %{
+      id: event.id,
+      pubkey: event.pubkey,
+      name: Map.get(event.content, "name", "Unknown"),
+      about: Map.get(event.content, "about", ""),
+      picture: Map.get(event.content, "picture", ""),
+      npub: Bech32.hex_to_npub(event.pubkey)
+    }
+
+    {:noreply, stream_insert(socket, :profiles, profile)}
+  end
+
+  @impl true
+  def handle_info(_, socket), do: {:noreply, socket}
 
   defp search(%{pubkey: pubkey, relays: relays} = profile_data) when relays != [] do
     case find_local_profile(profile_data.pubkey) do
       {:ok, profile} -> {:ok, profile, :local}
       {:error, :not_found} ->
         case Profile.sub_via_relays(pubkey, relays) do
-          :ok ->
-            {:ok, profile_data}
+          :ok -> {:ok, profile_data}
           err -> err
         end
       error -> error
     end
   end
+
+  defp search(%{pubkey: _pubkey, relays: []} = data), do: {:ok, data}
 
   defp find_local_profile(pubkey) do
     case Profile.get_by_pubkey(pubkey) do
@@ -105,22 +124,6 @@ defmodule MistWeb.ProfileLive.Index do
     |> assign(:profiles, [])
   end
 
-  @impl true
-  def handle_info({MistWeb.ProfileLive.FormComponent, {:saved, profile}}, socket) do
-    {:noreply, stream_insert(socket, :profiles, profile)}
-  end
-
-  @impl true
-  def handle_info(%Event{} = event, socket) do
-    {:noreply, stream_insert(socket, :profiles, %{id: event.id, profile: event.content})}
-  end
-
-  @impl true
-  def handle_info(msg, socket) do
-      dbg(msg)
-     {:noreply, socket}
-  end
-
   defp parse_identifier("nprofile" <> _rest = input) do
     NIP19.parse(input)
   end
@@ -129,14 +132,12 @@ defmodule MistWeb.ProfileLive.Index do
     case Bech32.npub_to_hex(input) do
       pubkey when is_binary(pubkey) ->
         {:ok, %{pubkey: pubkey, npub: input, relays: []}}
-
       _ ->
         {:error, "Invalid npub format"}
     end
   end
 
   defp parse_identifier(input) when byte_size(input) == 64 do
-    # Assume raw hex pubkey if 64 chars
     npub = Bech32.hex_to_npub(input)
     {:ok, %{pubkey: input, npub: npub, relays: []}}
   end
