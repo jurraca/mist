@@ -12,7 +12,8 @@ defmodule MistWeb.NotesChannel do
   def handle_in("subscribe_follows", %{"pubkey" => pubkey}, socket) do
     with {:ok, profile} <- Profile.get_by_pubkey(pubkey) |> then(&{:ok, &1}),
          followed <- profile |> Profile.preload(:following) |> Map.get(:following) do
-      Enum.each(followed, &Dispatcher.subscribe_notes(&1.pubkey))
+      pubkeys = Enum.map(followed, & &1.pubkey)
+      Nostrbase.send_subscription([authors: pubkeys, kinds: [1]], [])
       {:reply, {:ok, %{followed_count: length(followed)}}, socket}
     else
       _ -> {:reply, {:error, %{reason: "Profile not found"}}, socket}
