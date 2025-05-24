@@ -118,6 +118,25 @@ defmodule Mist.Profile do
     end
   end
 
+  def set_my_profile(pubkey) do
+    with {:ok, profile} <- get_or_create_profile(pubkey) do
+      :persistent_term.put(:my_profile_pubkey, pubkey)
+      {:ok, profile}
+    end
+  end
+
+  def get_my_profile do
+    case :persistent_term.get(:my_profile_pubkey, nil) do
+      nil -> {:error, :no_profile_set}
+      pubkey -> get_by_pubkey(pubkey)
+    end
+  end
+
+  def fetch_follows(pubkey) do
+    Nostrbase.send_subscription([authors: [pubkey], kinds: [3]], [])
+    {:ok, pubkey}
+  end
+
   defp get_or_create_profile(pubkey) do
     case get_by_pubkey(pubkey) do
       nil -> create_profile(%{pubkey: pubkey})
