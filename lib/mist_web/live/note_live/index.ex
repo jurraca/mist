@@ -5,9 +5,7 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket) do
       {:ok, stream(socket, :notes, [])}
-    end
   end
 
   @impl true
