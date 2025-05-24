@@ -9,7 +9,8 @@ import Config
 
 config :mist,
   ecto_repos: [Mist.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  private_key: System.get_env("NOSTR_PRIVKEY")
 
 # Configures the endpoint
 config :mist, MistWeb.Endpoint,
