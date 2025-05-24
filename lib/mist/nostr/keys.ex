@@ -3,6 +3,10 @@ defmodule Mist.Nostr.Keys do
   Handles private key management
   """
 
+  @doc """
+  Gets the private key, validating its format.
+  Returns {:ok, key} or {:error, reason}
+  """
   def get_private_key do
     case Application.get_env(:mist, :private_key) do
       nil ->
