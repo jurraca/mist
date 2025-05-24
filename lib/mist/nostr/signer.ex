@@ -10,9 +10,19 @@ defmodule Mist.Nostr.Signer do
   end
 
   @impl true
-  def init(opts) do
-    signing_method = Keyword.get(opts, :signing_method, :local)
-    {:ok, %{signing_method: signing_method, authorized_clients: %{}}}
+  def init(_opts) do
+    config = Application.get_env(:mist, :signer, mode: {:local})
+
+    case config[:mode] do
+      {:local} ->
+        {:ok, %{mode: :local, authorized_clients: %{}}}
+
+      {:remote, bunker_url} when is_binary(bunker_url) ->
+        {:ok, %{mode: :remote, bunker_url: bunker_url, authorized_clients: %{}}}
+
+      invalid_config ->
+        {:stop, "Invalid signer config: #{inspect(invalid_config)}"}
+    end
   end
 
   # Client API - mimics NIP-46 bunker interface
