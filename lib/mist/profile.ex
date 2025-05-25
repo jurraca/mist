@@ -137,7 +137,7 @@ defmodule Mist.Profile do
     {:ok, pubkey}
   end
 
-  defp get_or_create_profile(pubkey) do
+  def get_or_create_profile(pubkey) do
     case get_by_pubkey(pubkey) do
       nil -> create_profile(%{pubkey: pubkey})
       profile -> {:ok, profile}

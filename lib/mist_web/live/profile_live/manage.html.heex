@@ -1,0 +1,25 @@
+
+<div class="max-w-2xl mx-auto mt-8">
+  <.header>
+    Manage Profile
+    <:subtitle>Update your Nostr profile (kind 0 event)</:subtitle>
+  </.header>
+
+  <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+    <p class="font-mono text-sm break-all">Your pubkey: <%= @pubkey %></p>
+  </div>
+
+  <.simple_form for={@form} phx-submit="save" class="mt-8">
+    <.input field={@form["name"]} label="Name" type="text"/>
+    <.input field={@form["display_name"]} label="Display Name" type="text"/>
+    <.input field={@form["about"]} label="About" type="textarea"/>
+    <.input field={@form["picture"]} label="Picture URL" type="url"/>
+    <.input field={@form["banner"]} label="Banner URL" type="url"/>
+    <.input field={@form["website"]} label="Website" type="url"/>
+    <.input field={@form["bot"]} label="Is Bot?" type="checkbox"/>
+    
+    <:actions>
+      <.button type="submit" phx-disable-with="Saving...">Save Profile</.button>
+    </:actions>
+  </.simple_form>
+</div>

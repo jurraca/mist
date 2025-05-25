@@ -24,6 +24,7 @@ defmodule MistWeb.Router do
     live "/profiles", ProfileLive.Index, :index
     live "/profiles/new", ProfileLive.Index, :new
     live "/profiles/:id", ProfileLive.Index, :show
+    live "/profile/manage", ProfileLive.Manage, :index
   end
 
   # Other scopes may use custom stacks.
