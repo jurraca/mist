@@ -1,4 +1,3 @@
-
 <div class="mx-auto max-w-2xl">
   <.header>
     Profiles
@@ -28,7 +27,7 @@
           </div>
           <div class="flex-1">
             <h3 class="font-medium"><%= profile.name %></h3>
-            <p class="text-sm text-gray-500 break-all"><%= profile.npub %></p>
+            <p class="text-sm text-gray-500 break-all"><%= profile.pubkey %></p>
             <p :if={profile.about} class="mt-2 text-sm"><%= profile.about %></p>
           </div>
         </div>

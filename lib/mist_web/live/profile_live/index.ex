@@ -7,6 +7,8 @@ defmodule MistWeb.ProfileLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    Phoenix.PubSub.subscribe(Mist.PubSub, "profiles")
+
     {:ok,
      socket
      |> stream(:profiles, Profile.list_profiles())
@@ -61,21 +63,24 @@ defmodule MistWeb.ProfileLive.Index do
 
   @impl true
   def handle_info(%Event{kind: 0} = event, socket) do
-    profile = %{
-      id: event.id,
-      pubkey: event.pubkey,
-      name: Map.get(event.content, "name", "Unknown"),
-      about: Map.get(event.content, "about", ""),
-      picture: Map.get(event.content, "picture", ""),
-      banner: Map.get(event.content, "banner")
-    }
+    dbg("RECVD kind 0")
 
     case :elixir_json.decode(event.content) do
-      {:ok, attrs} ->  Profile.create_profile(attrs)
-      {:error, reason} -> {:error, reason}
-    end
+      {:ok, content} ->
+        profile = %{
+          id: event.id,
+          pubkey: event.pubkey,
+          name: Map.get(content, "name", "Unknown"),
+          about: Map.get(content, "about", ""),
+          picture: Map.get(content, "picture", ""),
+          banner: Map.get(content, "banner", "")
+        }
 
-    {:noreply, stream_insert(socket, :profiles, profile)}
+        {:noreply, stream_insert(socket, :profiles, profile)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -83,13 +88,17 @@ defmodule MistWeb.ProfileLive.Index do
 
   defp search(%{pubkey: pubkey, relays: relays} = profile_data) when relays != [] do
     case find_local_profile(profile_data.pubkey) do
-      {:ok, profile} -> {:ok, profile, :local}
+      {:ok, profile} ->
+        {:ok, profile, :local}
+
       {:error, :not_found} ->
         case Profile.sub_via_relays(pubkey, relays) do
           :ok -> {:ok, profile_data}
           err -> err
         end
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -133,6 +142,7 @@ defmodule MistWeb.ProfileLive.Index do
     case Bech32.npub_to_hex(input) do
       pubkey when is_binary(pubkey) ->
         {:ok, %{pubkey: pubkey, npub: input, relays: []}}
+
       _ ->
         {:error, "Invalid npub format"}
     end
