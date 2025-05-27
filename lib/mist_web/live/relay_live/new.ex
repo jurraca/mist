@@ -10,7 +10,7 @@ defmodule MistWeb.RelayLive.New do
   def handle_params(_params, _, socket) do
     {:noreply,
      socket
-     |> assign(:page_title, page_title(socket.assigns.live_action))
+     |> assign(:page_title, "New Relay")
      }
   end
 

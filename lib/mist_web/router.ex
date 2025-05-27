@@ -19,7 +19,7 @@ defmodule MistWeb.Router do
 
     get "/", PageController, :home
     live "/relays", RelayLive.Index, :index
-    live "/relays/new", RelayLive.New, :new
+    live "/relays/new", RelayLive.Index, :new
     live "/notes", NoteLive.Index, :index
     live "/profiles", ProfileLive.Index, :index
     live "/profiles/new", ProfileLive.Index, :new

@@ -6,60 +6,65 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    relay_states = RelayManager.get_states()
-    |> Enum.map(fn state -> 
-      %Relay.Status{id: state.url, relay_info: %{"status" => "loading"}, url: state.url}
-    end)
+    relay_map = get_relay_states() |> Map.new(&{&1.id, &1})
 
     socket = socket
-    |> stream(:relays, relay_states)
-    |> assign(:page_title, "Listing Relays")
+    |> assign(:relays, relay_map)
+    |> assign(:page_title, "My Relays")
 
-    # Fetch relay info asynchronously for each relay
-    for state <- relay_states do
-      send(self(), {:fetch_relay_info, state})
+    for {id, state} <- relay_map do
+      send(self(), {:fetch_relay_info, {id, state}})
     end
 
     {:ok, socket}
   end
 
   @impl true
-  def handle_info({:fetch_relay_info, state}, socket) do
+  def handle_params(params, _, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  @impl true
+  def handle_info({:fetch_relay_info, {id, state}}, socket) do
     case Relay.Info.get(state.url) do
-      {:ok, info} -> 
-        {:noreply, stream_insert(socket, :relays, %{state | relay_info: info})}
-      {:error, _reason} -> 
-        {:noreply, stream_insert(socket, :relays, %{state | relay_info: %{"status" => "unavailable"}})}
+      {:ok, info} ->
+        updated_relays = Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: info} end)
+        {:noreply, assign(socket, :relays, updated_relays)}
+      {:error, _reason} ->
+        updated_relays = Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: %{"status" => "unavailable"}} end)
+        {:noreply, assign(socket, :relays, updated_relays)}
     end
   end
 
   @impl true
-  def handle_params(params, _url, socket) do
-    {:noreply, socket}
-  end
-
-  defp apply_action(socket, :edit, %{"id" => id}) do
-    socket
-    |> assign(:page_title, "Edit Relay")
-    |> assign(:relay, Relay.get_relay!(id))
+  def handle_info({MistWeb.RelayLive.FormComponent, :saved}, socket) do
+    relay_states = get_relay_states()
+    {:noreply, assign(socket, :relays, relay_states)}
   end
 
   defp apply_action(socket, :new, _params) do
     socket
     |> assign(:page_title, "New Relay")
-    |> assign(:relay, %Relay.Relay{})
+    |> assign(:relay, %Relay.Status{})
+    |> assign(:live_action, :new)
+  end
+
+  defp apply_action(socket, _, _params) do
+    socket
   end
 
   @impl true
-  def handle_info({MistWeb.RelayLive.FormComponent, {:saved, relay}}, socket) do
-    {:noreply, stream_insert(socket, :relays, relay)}
+  def handle_event("delete", %{"name" => name}, socket) do
+    RelayManager.disconnect(name)
+
+    relay_states = get_relay_states()
+    {:noreply, assign(socket, :relays, relay_states)}
   end
 
-  @impl true
-  def handle_event("delete", %{"id" => id}, socket) do
-    relay = Relay.get_relay!(id)
-    RelayManager.disconnect(relay.name)
-
-    {:noreply, stream_delete(socket, :relays, relay)}
+  defp get_relay_states() do
+    RelayManager.get_states()
+    |> Enum.map(fn state ->
+      %Relay.Status{id: state.name, relay_name: state.name, relay_info: %{"status" => "loading"}, url: state.url}
+    end)
   end
 end

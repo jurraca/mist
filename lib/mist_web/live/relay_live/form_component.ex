@@ -33,21 +33,20 @@ defmodule MistWeb.RelayLive.FormComponent do
      socket
      |> assign(assigns)
      |> assign_new(:form, fn ->
-       to_form(Relay.change_relay(relay))
+        to_form(%{"url" => nil})
      end)}
   end
 
   @impl true
   def handle_event("validate", %{"relay" => relay_params}, socket) do
-    changeset = Relay.change_relay(socket.assigns.relay, relay_params)
+    changeset = Map.merge(socket.assigns.relay, relay_params)
     {:noreply, assign(socket, form: to_form(changeset, action: :validate))}
   end
 
-  def handle_event("save", %{"relay" => %{"url" => url}}, socket) do
+  def handle_event("save", %{"url" => url}, socket) do
     case Nostrbase.add_relay(url) do
       {:ok, _pid} ->
-        {:ok, relay} = Relay.create_relay(%{name: url})
-        notify_parent({:saved, relay})
+        notify_parent(:saved)
 
         {:noreply,
          socket
