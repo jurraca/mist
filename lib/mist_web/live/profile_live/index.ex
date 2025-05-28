@@ -28,7 +28,7 @@ defmodule MistWeb.ProfileLive.Index do
 
       case search(profile_data) do
         {:ok, profile, :local} ->
-          {:noreply, assign(socket, :parsed_profile, profile)}
+          {:noreply, stream_insert(socket, :profiles, profile)}
 
         {:ok, %{pubkey: pubkey, relays: relays}} when relays != [] ->
           {:noreply,
@@ -62,25 +62,9 @@ defmodule MistWeb.ProfileLive.Index do
   end
 
   @impl true
-  def handle_info(%Event{kind: 0} = event, socket) do
-    dbg("RECVD kind 0")
-
-    case :elixir_json.decode(event.content) do
-      {:ok, content} ->
-        profile = %{
-          id: event.id,
-          pubkey: event.pubkey,
-          name: Map.get(content, "name", "Unknown"),
-          about: Map.get(content, "about", ""),
-          picture: Map.get(content, "picture", ""),
-          banner: Map.get(content, "banner", "")
-        }
-
-        {:noreply, stream_insert(socket, :profiles, profile)}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
+  def handle_info(%Profile.Profile{} = profile, socket) do
+    dbg("Profile Liveview RECVD kind 0")
+    {:noreply, stream_insert(socket, :profiles, profile)}
   end
 
   @impl true

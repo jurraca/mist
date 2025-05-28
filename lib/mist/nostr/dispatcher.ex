@@ -3,6 +3,7 @@ defmodule Mist.Nostr.Dispatcher do
   require Logger
 
   alias Nostr.Event
+  alias Mist.Profile
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -46,15 +47,43 @@ defmodule Mist.Nostr.Dispatcher do
   @impl GenServer
   def handle_info({:event, _sub_id, %Event{kind: 0} = event}, state) do
     dbg("DISPATCH RECV ")
-    Phoenix.PubSub.broadcast(Mist.PubSub, "profiles", event)
+
+    with {:ok, content} <- Jason.decode(event.content),
+      {:ok, profile} <- content
+          |> Map.put("id", event.id)
+          |> Map.put("pubkey", event.pubkey)
+          |> Profile.create_profile() do
+        Phoenix.PubSub.broadcast(Mist.PubSub, "profiles", profile)
+        {:noreply, state}
+    end
+  end
+
+  @impl GenServer
+  def handle_info({:event, _sub_id, %Event{kind: 1} = event}, state) do
+    topic = "notes"
+    # Write to a kind-1-only DB table
+    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
+
+    {:noreply, state}
+  end
+
+  @impl GenServer
+  def handle_info({:event, _sub_id, %Event{kind: 3} = event}, state) do
+    dbg(event)
+    topic = "profiles"
+    #Profile.create_profile()
+    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
+
     {:noreply, state}
   end
 
   @impl GenServer
   def handle_info({:event, _sub_id, event}, state) do
-    # Broadcast to Phoenix PubSub based on event kind
+    dbg(event)
     topic = "events:#{event.kind}"
+    # write to a general events table
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
+
     {:noreply, state}
   end
 

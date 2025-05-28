@@ -133,7 +133,7 @@ defmodule Mist.Profile do
   end
 
   def fetch_follows(pubkey) do
-    Nostrbase.send_subscription([authors: [pubkey], kinds: [3]], [])
+    Dispatcher.subscribe_follows(pubkey)
     {:ok, pubkey}
   end
 
