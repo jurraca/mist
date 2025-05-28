@@ -45,7 +45,7 @@ defmodule Mist.Nostr.Signer do
     {:reply, {:ok, "ack"}, put_in(state.authorized_clients[client_pubkey], true)}
   end
 
-  @impl true 
+  @impl true
   def handle_call(:get_public_key, _from, state) do
     case Keys.derive_public_key() do
       {:ok, pubkey} -> {:reply, {:ok, pubkey}, state}
@@ -57,7 +57,7 @@ defmodule Mist.Nostr.Signer do
   def handle_call({:sign_event, event_params}, _from, %{mode: :local} = state) do
     case Keys.get_private_key() do
       {:ok, priv_key} ->
-        event = Nostr.Event.create(event_params, priv_key)
+        event = Nostr.Event.sign(event_params, priv_key)
         {:reply, {:ok, event}, state}
       {:error, _} = err ->
         {:reply, err, state}

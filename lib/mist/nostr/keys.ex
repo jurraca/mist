@@ -28,7 +28,7 @@ defmodule Mist.Nostr.Keys do
             {:ok, priv_key_bytes} ->
               hex_pub_key =
                 priv_key_bytes
-                |> Secp256k1.pubkey(:compressed)
+                |> Secp256k1.pubkey(:xonly)
                 |> Base.encode16(case: :lower)
 
               {:ok, hex_pub_key}
