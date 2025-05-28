@@ -1,0 +1,45 @@
+    <div class="mx-auto max-w-2xl">
+      <.header>
+        My Profile
+        <:subtitle>Manage your profile</:subtitle>
+      </.header>
+
+      <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+        <h3 class="text-lg font-semibold mb-2">my public key</h3>
+        <p class="text-sm text-gray-600 break-all font-mono"><%= @pubkey %></p>
+      </div>
+
+      <div :if={@profile && (@profile.name || @profile.about)} class="mt-2 p-6 bg-white shadow rounded-lg">
+        <h3 class="text-lg font-semibold mb-4"></h3>
+        <div class="flex items-start gap-4">
+          <div :if={@profile.picture} class="w-16 h-16">
+            <img src={@profile.picture} class="w-full h-full rounded-full object-cover" alt={@profile.name || "Profile"}/>
+          </div>
+          <div class="flex-1">
+            <h4 class="font-medium text-lg"><%= @profile.display_name || @profile.name || "Unnamed" %></h4>
+            <p :if={@profile.name && @profile.display_name} class="text-sm text-gray-500">@<%= @profile.name %></p>
+            <p :if={@profile.about} class="mt-2 text-sm"><%= @profile.about %></p>
+            <p :if={@profile.website} class="mt-2">
+              <a href={@profile.website} target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline text-sm">
+                <%= @profile.website %>
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <.simple_form for={@form} phx-submit="save" phx-change="validate" class="mt-8">
+        <.input field={@form[:name]} type="text" label="Name" />
+        <.input field={@form[:display_name]} type="text" label="Display Name" />
+        <.input field={@form[:about]} type="textarea" label="About" />
+        <.input field={@form[:picture]} type="url" label="Picture URL" />
+        <.input field={@form[:banner]} type="url" label="Banner URL" />
+        <.input field={@form[:website]} type="url" label="Website" />
+        <.input field={@form[:bot]} type="checkbox" label="Bot Account" />
+
+        <:actions>
+          <.button phx-disable-with="Saving...">Save</.button>
+        </:actions>
+      </.simple_form>
+
+    </div>
