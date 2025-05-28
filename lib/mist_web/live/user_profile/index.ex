@@ -9,11 +9,12 @@ defmodule MistWeb.UserProfile.Index do
     case Signer.get_public_key() do
       {:ok, pubkey} ->
         {:ok, profile} = Profile.get_or_create_profile(pubkey)
+        profile_with_follows = Mist.Repo.preload(profile, :following)
 
         {:ok,
          assign(socket,
            pubkey: pubkey,
-           profile: profile,
+           profile: profile_with_follows,
            form: to_form(%{
              "name" => profile.name || "",
              "about" => profile.about || "",

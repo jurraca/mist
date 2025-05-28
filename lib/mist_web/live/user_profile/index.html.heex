@@ -42,4 +42,35 @@
         </:actions>
       </.simple_form>
 
+      <div :if={@profile.following && length(@profile.following) > 0} class="mt-8 p-6 bg-white shadow rounded-lg">
+        <h3 class="text-lg font-semibold mb-4">Following (<%= length(@profile.following) %>)</h3>
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div :for={followed <- @profile.following} class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div :if={followed.picture} class="w-10 h-10">
+              <img src={followed.picture} class="w-full h-full rounded-full object-cover" alt={followed.name || "Profile"}/>
+            </div>
+            <div :if={!followed.picture} class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+              <span class="text-gray-600 text-sm font-medium">
+                <%= String.first(followed.name || followed.display_name || "?") %>
+              </span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-medium text-sm truncate">
+                <%= followed.display_name || followed.name || "Unnamed" %>
+              </p>
+              <p :if={followed.name && followed.display_name} class="text-xs text-gray-500 truncate">
+                @<%= followed.name %>
+              </p>
+              <p class="text-xs text-gray-400 font-mono truncate">
+                <%= String.slice(followed.pubkey, 0, 16) %>...
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div :if={!@profile.following || length(@profile.following) == 0} class="mt-8 p-6 bg-gray-50 rounded-lg">
+        <h3 class="text-lg font-semibold mb-2">Following</h3>
+        <p class="text-gray-600">You're not following anyone yet.</p>
+      </div>
     </div>
