@@ -5,6 +5,8 @@ defmodule Mist.Profile.Profile do
   schema "profiles" do
     field :name, :string
     field :pubkey, :string
+    field :petname, :string
+    field :relay, :string
     field :about, :string
     field :picture, :string
     field :display_name, :string
