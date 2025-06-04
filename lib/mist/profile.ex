@@ -129,6 +129,20 @@ defmodule Mist.Profile do
     end
   end
 
+  def add_follow_list(follower_pubkey, new_follows) do
+    with {:ok, follower} <- get_by_pubkey(follower_pubkey),
+         follower <- Repo.preload(follower, :following),
+         followed_list <- Enum.map(new_follows, &create_or_update_profile/1) do
+
+      new_following = followed_list |> Enum.uniq_by(& &1.id)
+
+      follower
+      |> Profile.changeset(%{})
+      |> Ecto.Changeset.put_assoc(:following, new_following)
+      |> Repo.update()
+    end
+  end
+
   def set_my_profile(pubkey) do
     with {:ok, profile} <- get_or_create_profile(pubkey) do
       :persistent_term.put(:my_profile_pubkey, pubkey)
@@ -152,6 +166,14 @@ defmodule Mist.Profile do
     case get_by_pubkey(pubkey) do
       nil -> create_profile(%{pubkey: pubkey})
       profile -> {:ok, profile}
+    end
+  end
+
+  def create_or_update_profile(%{user: pubkey} = attrs) do
+    attrs = %{attrs | pubkey: pubkey}
+    case get_by_pubkey(pubkey) do
+      nil -> create_profile(attrs)
+      profile -> update_profile(profile, attrs)
     end
   end
 
