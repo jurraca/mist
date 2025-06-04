@@ -7,7 +7,7 @@ defmodule Mist.Profile do
   alias Mist.Repo
 
   alias Mist.Nostr.Dispatcher
-  alias Mist.Profile.Profile
+  alias Mist.Profile.{Follows, Profile}
   alias Mist.Relay
 
   @doc """
@@ -58,7 +58,9 @@ defmodule Mist.Profile do
   end
 
   def get_by_pubkey(pubkey) do
-    Repo.get_by(Profile, pubkey: pubkey)
+    Profile
+    |> Repo.get_by(pubkey: pubkey)
+    |> Repo.preload([:following])
   end
 
   def sub_via_relays(pubkey, [ h | _ ] = relays) do
@@ -106,15 +108,24 @@ defmodule Mist.Profile do
     Repo.delete(profile)
   end
 
-  def store_follows(pubkey, followed_pubkeys) do
-    with {:ok, profile} <- get_or_create_profile(pubkey) do
-      followed_profiles = Enum.map(followed_pubkeys, &get_or_create_profile/1)
-      
-      profile
-      |> Repo.preload(:following)
-      |> Profile.changeset(%{})
-      |> Ecto.Changeset.put_assoc(:following, followed_profiles)
-      |> Repo.update()
+  def follow_profile(follower_pubkey, followed_pubkey) do
+    with {:ok, follower} <- get_or_create_profile(follower_pubkey),
+      {:ok, followed} <- get_or_create_profile(followed_pubkey) do
+
+      %Follows{}
+      |> Follows.changeset(%{follower_id: follower.id, followed_id: followed.id})
+      |> Repo.insert()
+    end
+  end
+
+  def unfollow_profile(follower_pubkey, followed_pubkey) do
+    with {:ok, follower} <- get_by_pubkey(follower_pubkey),
+         {:ok, followed} <- get_by_pubkey(followed_pubkey) do
+
+      from(f in Follows,
+        where: f.follower_id == ^follower.id and f.followed_id == ^followed.id
+      )
+      |> Repo.delete_all()
     end
   end
 

@@ -30,6 +30,9 @@
             <p class="text-sm text-gray-500 break-all"><%= profile.pubkey %></p>
             <p :if={profile.about} class="mt-2 text-sm"><%= profile.about %></p>
           </div>
+          <div :if={profile.following} class="w-12 h-12">
+             <button class="bg-blue-500 text-white font-bold py-2 px-4 rounded" phx-click={JS.push("follow", value: %{pubkey: profile.pubkey})}>Follow</button>
+          </div>
         </div>
       </div>
     </div>

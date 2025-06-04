@@ -8,13 +8,14 @@ defmodule MistWeb.ProfileLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     Phoenix.PubSub.subscribe(Mist.PubSub, "profiles")
+    %{following: follows} = Profile.get_my_profile() |> Map.take([:following])
 
     {:ok,
      socket
-     |> stream(:profiles, Profile.list_profiles())
+     |> stream(:profiles, follows)
      |> assign(:search_form, to_form(%{"search_term" => ""}))
      |> assign(:parsed_profile, nil)}
-  end
+     end
 
   @impl true
   def handle_event("search", %{"search_term" => ""}, socket) do
@@ -59,6 +60,14 @@ defmodule MistWeb.ProfileLive.Index do
     {:ok, _} = Profile.delete_profile(profile)
 
     {:noreply, stream_delete(socket, :profiles, profile)}
+  end
+
+  @impl true
+  def handle_event("follow", %{"pubkey" => pubkey}, socket) do
+    :persistent_term.get(:my_profile_pubkey, nil)
+    |> Profile.follow_profile(pubkey)
+
+    {:noreply, socket}
   end
 
   @impl true
