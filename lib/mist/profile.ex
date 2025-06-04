@@ -108,6 +108,11 @@ defmodule Mist.Profile do
     Repo.delete(profile)
   end
 
+  def fetch_follows(pubkey) do
+    Dispatcher.subscribe_follows(pubkey)
+    {:ok, pubkey}
+  end
+
   def follow_profile(follower_pubkey, followed_pubkey) do
     with {:ok, follower} <- get_or_create_profile(follower_pubkey),
       {:ok, followed} <- get_or_create_profile(followed_pubkey) do
@@ -155,11 +160,6 @@ defmodule Mist.Profile do
       nil -> {:error, :no_profile_set}
       pubkey -> get_by_pubkey(pubkey)
     end
-  end
-
-  def fetch_follows(pubkey) do
-    Dispatcher.subscribe_follows(pubkey)
-    {:ok, pubkey}
   end
 
   def get_or_create_profile(pubkey) do
