@@ -200,6 +200,22 @@ defmodule Mist.Profile do
   end
 
   @doc """
+  Takes a list of profiles such as a follow list, and returns a map of relays to the profiles that write to them. This is useful to aggregate filters by relay before subscribing.
+  """
+  def get_write_relays_by_relay(follows) when is_list(follows) do
+    follow_pubkeys = Enum.map(follows, & &1.pubkey)
+
+    query = from ur in Mist.Profile.UserRelays,
+            join: p in Mist.Profile.Profile, on: ur.pubkey_id == p.id,
+            join: r in Mist.Relay.Relay, on: ur.relay_id == r.id,
+            where: p.pubkey in ^follow_pubkeys and ur.purpose in [:w, :rw],
+            group_by: r.relay_url,
+            select: {r.relay_url, fragment("ARRAY_AGG(?)", p.pubkey)}
+
+    Repo.all(query)
+  end
+
+  @doc """
   Returns an `%Ecto.Changeset{}` for tracking profile changes.
 
   ## Examples
