@@ -22,7 +22,7 @@ defmodule Mist.Profile.Profile do
   @doc false
   def changeset(profile, attrs) do
     profile
-    |> cast(attrs, [:pubkey, :name, :about, :picture, :display_name, :website, :banner, :bot])
+    |> cast(attrs, [:pubkey, :name, :petname, :relay, :about, :picture, :display_name, :website, :banner, :bot])
     |> validate_required([:pubkey])
   end
 end
