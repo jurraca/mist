@@ -75,9 +75,10 @@ defmodule Mist.Nostr.Dispatcher do
   end
 
   @impl GenServer
-  def handle_info({:event, _sub_id, %Event{kind: 3} = event}, state) do
+  def handle_info({:event, _sub_id, %Event{kind: 3, pubkey: pubkey, tags: tags} = event}, state) do
     dbg(event)
     topic = "profiles"
+    Profile.add_follow_list(tags)
     #Profile.create_profile()
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
 
