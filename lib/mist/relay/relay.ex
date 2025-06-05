@@ -4,6 +4,7 @@ defmodule Mist.Relay.Relay do
 
   schema "relays" do
     field :name, :string
+    field :url, :string
     field :version, :string
     field :description, :string
     field :banner, :string
@@ -19,7 +20,7 @@ defmodule Mist.Relay.Relay do
   @doc false
   def changeset(relay, attrs) do
     relay
-    |> cast(attrs, [:name, :description, :banner, :icon, :pubkey, :contact, :supported_nips, :software, :version])
-    |> validate_required([:name])
+    |> cast(attrs, [:name, :url, :description, :banner, :icon, :pubkey, :contact, :supported_nips, :software, :version])
+    |> validate_required([:url])
   end
 end
