@@ -48,7 +48,7 @@ defmodule Mist.Nostr.Dispatcher do
                   Logger.debug(reason)
               end
             end)
-            {:ok, sub_ids} 
+            {:ok, sub_ids}
 
           {:error, reason} ->
             Logger.debug(reason)
@@ -87,16 +87,20 @@ defmodule Mist.Nostr.Dispatcher do
     dbg("DISPATCH RECV ")
 
     with {:ok, content} <- Jason.decode(event.content),
-      {:ok, profile} <- content
-          |> Map.put("pubkey", pubkey)
-          |> Profile.create_profile() do
-        Phoenix.PubSub.broadcast(Mist.PubSub, "profiles", profile)
-        {:noreply, state}
+         {:ok, profile} <-
+           content
+           |> Map.put("pubkey", pubkey)
+           |> Profile.get_or_create_profile() do
+      Phoenix.PubSub.broadcast(Mist.PubSub, "profiles", profile)
+      {:noreply, state}
     end
   end
 
   @impl GenServer
-  def handle_info({:event, _sub_id, %Event{kind: 10002, pubkey: pubkey, tags: tags} = event}, state) do
+  def handle_info(
+        {:event, _sub_id, %Event{kind: 10002, pubkey: pubkey, tags: tags} = event},
+        state
+      ) do
     with {count, _} <- Profile.add_user_relays(pubkey, tags),
          true <- count > 0 do
       {:noreply, state}
@@ -117,7 +121,6 @@ defmodule Mist.Nostr.Dispatcher do
     dbg(event)
     topic = "profiles"
     Profile.add_follow_list(tags)
-    #Profile.create_profile()
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
 
     {:noreply, state}
