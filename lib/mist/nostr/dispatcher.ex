@@ -45,16 +45,23 @@ defmodule Mist.Nostr.Dispatcher do
   end
 
   @impl GenServer
-  def handle_info({:event, _sub_id, %Event{kind: 0} = event}, state) do
+  def handle_info({:event, _sub_id, %Event{kind: 0, pubkey: pubkey} = event}, state) do
     dbg("DISPATCH RECV ")
 
     with {:ok, content} <- Jason.decode(event.content),
       {:ok, profile} <- content
-          |> Map.put("id", event.id)
-          |> Map.put("pubkey", event.pubkey)
+          |> Map.put("pubkey", pubkey)
           |> Profile.create_profile() do
         Phoenix.PubSub.broadcast(Mist.PubSub, "profiles", profile)
         {:noreply, state}
+    end
+  end
+
+  @impl GenServer
+  def handle_info({:event, _sub_id, %Event{kind: 10002, pubkey: pubkey, tags: tags} = event}, state) do
+    with {count, _} <- Profile.add_user_relays(pubkey, tags),
+         true <- count > 0 do
+      {:noreply, state}
     end
   end
 

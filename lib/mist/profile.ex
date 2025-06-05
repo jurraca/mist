@@ -7,7 +7,7 @@ defmodule Mist.Profile do
   alias Mist.Repo
 
   alias Mist.Nostr.Dispatcher
-  alias Mist.Profile.{Follows, Profile}
+  alias Mist.Profile.{Follows, Profile, UserRelays}
   alias Mist.Relay
 
   @doc """
@@ -148,6 +148,20 @@ defmodule Mist.Profile do
     end
   end
 
+  def add_user_relays(pubkey, user_relays) do
+    profile = get_by_pubkey(pubkey)
+    relay_attrs = user_relays
+      |> Enum.map(fn tag ->
+        case UserRelays.parse_tag(tag) do
+          {:ok, parsed} -> Map.put(parsed, :profile_id, profile.id)
+          err -> nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    Repo.insert_all(UserRelays, relay_attrs)
+  end
+
   def set_my_profile(pubkey) do
     with {:ok, profile} <- get_or_create_profile(pubkey) do
       :persistent_term.put(:my_profile_pubkey, pubkey)
@@ -175,6 +189,14 @@ defmodule Mist.Profile do
       nil -> create_profile(attrs)
       profile -> update_profile(profile, attrs)
     end
+  end
+
+  def get_user_relays(pubkey) do
+    query = from r in UserRelays,
+            join: p in Profile, on: r.pubkey_id == p.id,
+            where: p.pubkey == ^pubkey,
+            select: %{relay: r.relay, purpose: r.purpose}
+    Repo.all(query, preload: [:relay])
   end
 
   @doc """

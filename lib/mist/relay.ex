@@ -84,6 +84,25 @@ defmodule Mist.Relay do
   end
 
   @doc """
+  Gets a relay by its URL or creates a new one if it doesn't exist.
+
+  ## Examples
+
+      iex> get_or_create_relay("wss://example.com", %{field: value})
+      {:ok, %Relay{}}
+
+      iex> get_or_create_relay("wss://example.com", %{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def get_or_create_relay(url, attrs \\ %{}) do
+    case Repo.get_by(Relay, url: url) do
+      nil -> attrs |> Map.merge(%{url: url}) |> create_relay()
+      relay -> {:ok, relay}
+    end
+  end
+
+  @doc """
   Updates a relay.
 
   ## Examples
