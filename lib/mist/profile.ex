@@ -150,10 +150,16 @@ defmodule Mist.Profile do
 
   def add_user_relays(pubkey, user_relays) do
     profile = get_by_pubkey(pubkey)
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
     relay_attrs = user_relays
       |> Enum.map(fn tag ->
         case UserRelays.parse_tag(tag) do
-          {:ok, parsed} -> Map.put(parsed, :profile_id, profile.id)
+          {:ok, parsed} -> parsed
+              |> Map.put(:pubkey_id, profile.id)
+              |> Map.put(:inserted_at, now)
+              |> Map.put(:updated_at, now)
+
           err -> nil
         end
       end)
@@ -177,8 +183,12 @@ defmodule Mist.Profile do
   end
 
   def get_or_create_profile(pubkey) do
+    get_or_create_profile(%{"pubkey" => pubkey})
+  end
+
+  def get_or_create_profile(%{"pubkey" => pubkey} = attrs) do
     case get_by_pubkey(pubkey) do
-      nil -> create_profile(%{pubkey: pubkey})
+      nil -> create_profile(attrs)
       profile -> {:ok, profile}
     end
   end
@@ -192,11 +202,12 @@ defmodule Mist.Profile do
   end
 
   def get_user_relays(pubkey) do
-    query = from r in UserRelays,
-            join: p in Profile, on: r.pubkey_id == p.id,
+    query = from ur in UserRelays,
+            join: p in Profile, on: ur.pubkey_id == p.id,
+            join: r in Mist.Relay.Relay, on: ur.relay_id == r.id,
             where: p.pubkey == ^pubkey,
-            select: %{relay: r.relay, purpose: r.purpose}
-    Repo.all(query, preload: [:relay])
+            select: %{relay: r.url, purpose: ur.purpose}
+    Repo.all(query)
   end
 
   @doc """
@@ -209,10 +220,10 @@ defmodule Mist.Profile do
             join: p in Mist.Profile.Profile, on: ur.pubkey_id == p.id,
             join: r in Mist.Relay.Relay, on: ur.relay_id == r.id,
             where: p.pubkey in ^follow_pubkeys and ur.purpose in [:w, :rw],
-            group_by: r.relay_url,
-            select: {r.relay_url, fragment("ARRAY_AGG(?)", p.pubkey)}
+            select: %{relay: r.url, pubkey: p.pubkey}
 
     Repo.all(query)
+    |> Enum.group_by(& &1.relay, & &1.pubkey)
   end
 
   @doc """
