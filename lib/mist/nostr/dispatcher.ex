@@ -2,9 +2,8 @@ defmodule Mist.Nostr.Dispatcher do
   use GenServer
   require Logger
 
-  alias Nostr.Event
+  alias Mist.Nostr.EventHandler
   alias Mist.Profile
-  alias Mist.Repo
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -102,56 +101,8 @@ defmodule Mist.Nostr.Dispatcher do
   end
 
   @impl GenServer
-  def handle_info({:event, _sub_id, %Event{kind: 0, pubkey: pubkey} = event}, state) do
-    dbg("DISPATCH RECV ")
-
-    with {:ok, content} <- Jason.decode(event.content),
-         {:ok, profile} <-
-           content
-           |> Map.put("pubkey", pubkey)
-           |> Profile.get_or_create_profile() do
-      Phoenix.PubSub.broadcast(Mist.PubSub, "profiles", profile)
-      {:noreply, state}
-    end
-  end
-
-  @impl GenServer
-  def handle_info(
-        {:event, _sub_id, %Event{kind: 10002, pubkey: pubkey, tags: tags} = event},
-        state
-      ) do
-    with {count, _} <- Profile.add_user_relays(pubkey, tags),
-         true <- count > 0 do
-      {:noreply, state}
-    end
-  end
-
-  @impl GenServer
-  def handle_info({:event, _sub_id, %Event{kind: 1} = event}, state) do
-    topic = "notes"
-    # Write to a kind-1-only DB table
-    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
-
-    {:noreply, state}
-  end
-
-  @impl GenServer
-  def handle_info({:event, _sub_id, %Event{kind: 3, pubkey: pubkey, tags: tags} = event}, state) do
-    dbg(event)
-    topic = "profiles"
-    Profile.add_follow_list(tags)
-    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
-
-    {:noreply, state}
-  end
-
-  @impl GenServer
   def handle_info({:event, _sub_id, event}, state) do
-    dbg(event)
-    topic = "events:#{event.kind}"
-    # write to a general events table
-    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
-
+    Task.start(fn -> EventHandler.process_event(event) end)
     {:noreply, state}
   end
 
