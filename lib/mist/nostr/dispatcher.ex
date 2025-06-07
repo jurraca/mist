@@ -29,12 +29,30 @@ defmodule Mist.Nostr.Dispatcher do
 
   @impl GenServer
   def handle_continue(_arg, state) do
-    subscribe_to_follows_events()
-    {:noreply, state}
+    case wait_for_signer_ready() do
+      :ok ->
+        subscribe_to_follows_events()
+        {:noreply, state}
+      :timeout ->
+        Logger.warning("Signer not ready after timeout, skipping follows subscription")
+        {:noreply, state}
+    end
+  end
+
+  defp wait_for_signer_ready(attempts \\ 10) do
+    case :persistent_term.get(:my_profile_pubkey, nil) do
+      nil when attempts > 0 ->
+        Process.sleep(100)
+        wait_for_signer_ready(attempts - 1)
+      nil ->
+        :timeout
+      _pubkey ->
+        :ok
+    end
   end
 
   defp subscribe_to_follows_events do
-    with %Profile.Profile{} = my_profile <- Profile.get_my_profile(),
+    with {:ok, %Profile.Profile{} = my_profile} <- Profile.get_my_profile(),
         write_relay_map = Profile.get_write_relays_by_relay(my_profile.following) do
 
         case write_relay_map |> Map.keys() |> Mist.Relay.maybe_connect_relays() do
@@ -47,7 +65,8 @@ defmodule Mist.Nostr.Dispatcher do
                 {:error, reason} ->
                   Logger.debug(reason)
               end
-            end)
+          end)
+
             {:ok, sub_ids}
 
           {:error, reason} ->

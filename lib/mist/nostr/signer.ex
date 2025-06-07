@@ -1,6 +1,7 @@
 defmodule Mist.Nostr.Signer do
   use GenServer
   alias Mist.Nostr.Keys
+  alias Mist.Profile
   require Logger
 
   @type signing_method :: :local | :remote
@@ -14,7 +15,8 @@ defmodule Mist.Nostr.Signer do
     config = Application.get_env(:mist, :signer, mode: {:local})
 
     case config[:mode] do
-      {:local} -> {:ok, %{mode: :local, authorized_clients: %{}}, {:continue, nil}}
+      {:local} ->
+        {:ok, %{mode: :local, authorized_clients: %{}}, {:continue, nil}}
 
       {:remote, bunker_url} when is_binary(bunker_url) ->
         {:ok, %{mode: :remote, bunker_url: bunker_url, authorized_clients: %{}}}
@@ -42,9 +44,12 @@ defmodule Mist.Nostr.Signer do
   def handle_continue(_arg, state) do
     case Keys.derive_public_key() do
       {:ok, pubkey} ->
-          :persistent_term.put(:my_profile_pubkey, pubkey)
-          {:noreply, state}
-      _ -> {:noreply, state}
+        :persistent_term.put(:my_profile_pubkey, pubkey)
+        Profile.get_or_create_profile(pubkey) |> dbg()
+        {:noreply, state}
+
+      _ ->
+        {:noreply, state}
     end
   end
 
@@ -60,7 +65,8 @@ defmodule Mist.Nostr.Signer do
       {:ok, pubkey} ->
         {:reply, {:ok, pubkey}, state}
 
-      {:error, _} = err -> {:reply, err, state}
+      {:error, _} = err ->
+        {:reply, err, state}
     end
   end
 
@@ -70,6 +76,7 @@ defmodule Mist.Nostr.Signer do
       {:ok, priv_key} ->
         event = Nostr.Event.sign(event_params, priv_key)
         {:reply, {:ok, event}, state}
+
       {:error, _} = err ->
         {:reply, err, state}
     end

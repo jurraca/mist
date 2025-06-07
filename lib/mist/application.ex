@@ -9,10 +9,10 @@ defmodule Mist.Application do
   def start(_type, _args) do
     children = [
       MistWeb.Telemetry,
-      {Mist.Nostr.Signer, signing_method: :local},
       Mist.Repo,
       {DNSCluster, query: Application.get_env(:mist, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Mist.PubSub},
+      {Mist.Nostr.Signer, signing_method: :local},
       Mist.Nostr.Dispatcher,
       MistWeb.Endpoint
     ]
