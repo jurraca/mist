@@ -6,15 +6,12 @@ defmodule MistWeb.UserProfile.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    case Signer.get_public_key() do
-      {:ok, pubkey} ->
-        {:ok, profile} = Profile.get_or_create_profile(pubkey)
-        profile_with_follows = Mist.Repo.preload(profile, :following)
-
+    case Profile.get_my_profile() do
+      {:ok, profile} ->
         {:ok,
          assign(socket,
-           pubkey: pubkey,
-           profile: profile_with_follows,
+           pubkey: profile["pubkey"],
+           profile: profile,
            form: to_form(%{
              "name" => profile.name || "",
              "about" => profile.about || "",

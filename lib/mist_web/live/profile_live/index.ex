@@ -8,14 +8,23 @@ defmodule MistWeb.ProfileLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     Phoenix.PubSub.subscribe(Mist.PubSub, "profiles")
-    %{following: follows} = Profile.get_my_profile() |> Map.take([:following])
+    with {:ok, profile} <- Profile.get_my_profile(),
+        follows <- Map.get(profile, :following) do
 
-    {:ok,
-     socket
-     |> stream(:profiles, follows)
-     |> assign(:search_form, to_form(%{"search_term" => ""}))
-     |> assign(:parsed_profile, nil)}
+        {:ok,
+         socket
+         |> stream(:profiles, follows || [])
+         |> assign(:search_form, to_form(%{"search_term" => ""}))
+         |> assign(:parsed_profile, nil)}
+    else
+      {:error, reason} ->
+      {:ok, socket
+         |> stream(:profiles, [])
+         |> assign(:search_form, to_form(%{"search_term" => ""}))
+         |> assign(:parsed_profile, nil)
+        }
      end
+  end
 
   @impl true
   def handle_event("search", %{"search_term" => ""}, socket) do

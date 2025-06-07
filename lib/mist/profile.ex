@@ -165,24 +165,17 @@ defmodule Mist.Profile do
       end)
       |> Enum.reject(&is_nil/1)
 
-    Repo.insert_all(UserRelays, relay_attrs)
-  end
-
-  def set_my_profile(pubkey) do
-    with {:ok, profile} <- get_or_create_profile(pubkey) do
-      :persistent_term.put(:my_profile_pubkey, pubkey)
-      {:ok, profile}
-    end
+    Repo.insert_all(UserRelays, relay_attrs, on_conflict: {:replace_all_except, [:id]})
   end
 
   def get_my_profile do
     case :persistent_term.get(:my_profile_pubkey, nil) do
       nil -> {:error, :no_profile_set}
-      pubkey -> get_by_pubkey(pubkey)
+      pubkey -> {:ok, get_by_pubkey(pubkey)}
     end
   end
 
-  def get_or_create_profile(pubkey) do
+  def get_or_create_profile(pubkey) when is_binary(pubkey) do
     get_or_create_profile(%{"pubkey" => pubkey})
   end
 
@@ -194,7 +187,10 @@ defmodule Mist.Profile do
   end
 
   def create_or_update_profile(%{user: pubkey} = attrs) do
-    attrs = %{attrs | pubkey: pubkey}
+    create_or_update_profile(Map.merge(attrs, %{"pubkey" => pubkey}))
+  end
+
+  def create_or_update_profile(%{"pubkey" => pubkey} = attrs) do
     case get_by_pubkey(pubkey) do
       nil -> create_profile(attrs)
       profile -> update_profile(profile, attrs)
@@ -223,6 +219,7 @@ defmodule Mist.Profile do
             select: %{relay: r.url, pubkey: p.pubkey}
 
     Repo.all(query)
+    |> Enum.uniq()
     |> Enum.group_by(& &1.relay, & &1.pubkey)
   end
 
