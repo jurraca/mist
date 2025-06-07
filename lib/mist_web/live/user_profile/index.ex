@@ -10,7 +10,7 @@ defmodule MistWeb.UserProfile.Index do
       {:ok, profile} ->
         {:ok,
          assign(socket,
-           pubkey: profile["pubkey"],
+           pubkey: profile.pubkey,
            profile: profile,
            form: to_form(%{
              "name" => profile.name || "",
