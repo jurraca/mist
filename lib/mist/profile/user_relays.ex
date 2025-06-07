@@ -19,6 +19,7 @@ defmodule Mist.Profile.UserRelays do
     relay_metadata
     |> cast(attrs, [:relay_id, :pubkey_id, :purpose, :inserted_at, :updated_at])
     |> validate_required([:relay_id, :pubkey_id, :purpose])
+    |> unique_constraint([:relay_id, :pubkey_id])
   end
 
   def parse_tag(%{data: relay_url} = tag) do
