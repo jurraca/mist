@@ -66,14 +66,16 @@ defmodule Mist.Profile do
     |> Repo.insert()
   end
 
-  def sub_via_relays(pubkey, [ h | _ ] = relays) do
+  def sub_via_relays(pubkey, [h | _] = relays) do
     with {:ok, _} <- Relay.maybe_connect_relays([h]) do
       Dispatcher.subscribe_profile(pubkey, send_via: [h])
     else
       {:error, _} ->
         {connected, _} = Relay.connected(relays)
         Dispatcher.subscribe_profile(pubkey, send_via: connected)
-      err -> err
+
+      err ->
+        err
     end
   end
 
@@ -118,8 +120,7 @@ defmodule Mist.Profile do
 
   def follow_profile(follower_pubkey, followed_pubkey) do
     with {:ok, follower} <- get_or_create_profile(follower_pubkey),
-      {:ok, followed} <- get_or_create_profile(followed_pubkey) do
-
+         {:ok, followed} <- get_or_create_profile(followed_pubkey) do
       %Follows{}
       |> Follows.changeset(%{follower_id: follower.id, followed_id: followed.id})
       |> Repo.insert()
@@ -129,7 +130,6 @@ defmodule Mist.Profile do
   def unfollow_profile(follower_pubkey, followed_pubkey) do
     with {:ok, follower} <- get_by_pubkey(follower_pubkey),
          {:ok, followed} <- get_by_pubkey(followed_pubkey) do
-
       from(f in Follows,
         where: f.follower_id == ^follower.id and f.followed_id == ^followed.id
       )
@@ -138,16 +138,30 @@ defmodule Mist.Profile do
   end
 
   def add_follow_list(follower_pubkey, new_follows) do
-    with {:ok, follower} <- get_by_pubkey(follower_pubkey),
-         follower <- Repo.preload(follower, :following),
-         followed_list <- Enum.map(new_follows, &create_or_update_profile/1) do
+    with {:ok, follower} <- get_or_create_profile(follower_pubkey),
+         followed_list <-
+           Enum.map(
+             new_follows,
+             fn follow_tag ->
+               case create_profile_from_tag(follow_tag) do
+                 {:ok, profile} -> profile
+                 _ -> nil
+               end
+             end
+           )
+           |> Enum.reject(&is_nil/1)
+           |> Enum.uniq_by(& &1.id) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      new_following = followed_list |> Enum.uniq_by(& &1.id)
+      follow_list_attrs =
+        Enum.map(followed_list, fn profile ->
+          %{follower_id: follower.id,
+            followed_id: profile.id,
+            inserted_at: now,
+            updated_at: now}
+        end)
 
-      follower
-      |> Profile.changeset(%{})
-      |> Ecto.Changeset.put_assoc(:following, new_following)
-      |> Repo.update()
+      Repo.insert_all(Follows, follow_list_attrs, on_conflict: :nothing)
     end
   end
 
@@ -155,15 +169,18 @@ defmodule Mist.Profile do
     profile = get_by_pubkey(pubkey)
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    relay_attrs = user_relays
+    relay_attrs =
+      user_relays
       |> Enum.map(fn tag ->
         case UserRelays.parse_tag(tag) do
-          {:ok, parsed} -> parsed
-              |> Map.put(:pubkey_id, profile.id)
-              |> Map.put(:inserted_at, now)
-              |> Map.put(:updated_at, now)
+          {:ok, parsed} ->
+            parsed
+            |> Map.put(:pubkey_id, profile.id)
+            |> Map.put(:inserted_at, now)
+            |> Map.put(:updated_at, now)
 
-          err -> nil
+          err ->
+            nil
         end
       end)
       |> Enum.reject(&is_nil/1)
@@ -200,12 +217,32 @@ defmodule Mist.Profile do
     end
   end
 
+  def create_profile_from_tag(%Nostr.Tag{data: pubkey, info: info}) do
+    attrs = %{pubkey: pubkey}
+
+    attrs =
+      case info do
+        [relay, petname] -> Map.merge(attrs, %{relay: relay, petname: petname})
+        [relay] -> Map.put(attrs, :relay, relay)
+        _ -> attrs
+      end
+
+    case get_by_pubkey(pubkey) do
+      nil -> create_profile(attrs)
+      profile -> update_profile(profile, attrs)
+    end
+  end
+
   def get_user_relays(pubkey) do
-    query = from ur in UserRelays,
-            join: p in Profile, on: ur.pubkey_id == p.id,
-            join: r in Mist.Relay.Relay, on: ur.relay_id == r.id,
-            where: p.pubkey == ^pubkey,
-            select: %{relay: r.url, purpose: ur.purpose}
+    query =
+      from ur in UserRelays,
+        join: p in Profile,
+        on: ur.pubkey_id == p.id,
+        join: r in Mist.Relay.Relay,
+        on: ur.relay_id == r.id,
+        where: p.pubkey == ^pubkey,
+        select: %{relay: r.url, purpose: ur.purpose}
+
     Repo.all(query)
   end
 
@@ -215,11 +252,14 @@ defmodule Mist.Profile do
   def get_write_relays_by_relay(follows) when is_list(follows) do
     follow_pubkeys = Enum.map(follows, & &1.pubkey)
 
-    query = from ur in Mist.Profile.UserRelays,
-            join: p in Mist.Profile.Profile, on: ur.pubkey_id == p.id,
-            join: r in Mist.Relay.Relay, on: ur.relay_id == r.id,
-            where: p.pubkey in ^follow_pubkeys and ur.purpose in [:w, :rw],
-            select: %{relay: r.url, pubkey: p.pubkey}
+    query =
+      from ur in Mist.Profile.UserRelays,
+        join: p in Mist.Profile.Profile,
+        on: ur.pubkey_id == p.id,
+        join: r in Mist.Relay.Relay,
+        on: ur.relay_id == r.id,
+        where: p.pubkey in ^follow_pubkeys and ur.purpose in [:w, :rw],
+        select: %{relay: r.url, pubkey: p.pubkey}
 
     Repo.all(query)
     |> Enum.uniq()
