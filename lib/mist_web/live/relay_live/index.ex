@@ -8,12 +8,15 @@ defmodule MistWeb.RelayLive.Index do
   def mount(_params, _session, socket) do
     relay_map = get_relay_states() |> Map.new(&{&1.id, &1})
 
-    socket = socket
-    |> assign(:relays, relay_map)
-    |> assign(:page_title, "My Relays")
+    socket =
+      socket
+      |> assign(:relays, relay_map)
+      |> assign(:page_title, "My Relays")
 
     for {id, state} <- relay_map do
-      send(self(), {:fetch_relay_info, {id, state}})
+      if is_nil(state.relay_info) do
+        send(self(), {:fetch_relay_info, {id, state}})
+      end
     end
 
     {:ok, socket}
@@ -28,10 +31,18 @@ defmodule MistWeb.RelayLive.Index do
   def handle_info({:fetch_relay_info, {id, state}}, socket) do
     case Relay.Info.get(state.url) do
       {:ok, info} ->
-        updated_relays = Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: info} end)
+        Relay.create_or_update_relay(state.url, info)
+        updated_relays =
+          Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: info} end)
+
         {:noreply, assign(socket, :relays, updated_relays)}
+
       {:error, _reason} ->
-        updated_relays = Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: %{"status" => "unavailable"}} end)
+        updated_relays =
+          Map.update(socket.assigns.relays, id, state, fn x ->
+            %{x | relay_info: %{"status" => "unavailable"}}
+          end)
+
         {:noreply, assign(socket, :relays, updated_relays)}
     end
   end
@@ -64,7 +75,23 @@ defmodule MistWeb.RelayLive.Index do
   defp get_relay_states() do
     RelayManager.get_states()
     |> Enum.map(fn state ->
-      %Relay.Status{id: state.name, relay_name: state.name, relay_info: %{"status" => "loading"}, url: state.url}
+      case Relay.query_relay_info(state.url) do
+        nil ->
+          %Relay.Status{
+            id: state.name,
+            relay_info: nil,
+            relay_name: state.name,
+            url: state.url
+          }
+
+        %Relay.Relay{} = relay_info ->
+          %Relay.Status{
+            id: state.name,
+            relay_info: relay_info,
+            relay_name: state.name,
+            url: state.url
+          }
+      end
     end)
   end
 end

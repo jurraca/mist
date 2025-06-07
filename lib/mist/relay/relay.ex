@@ -18,9 +18,19 @@ defmodule Mist.Relay.Relay do
   end
 
   @doc false
-  def changeset(relay, attrs) do
+  def changeset(relay, %{"url" => url} = attrs) do
+    uri = URI.parse(url)
+    name = uri.host
+    url = URI.to_string(uri) |> String.trim("/")
+    attrs = attrs |> Map.put("url", url) |> Map.put("name", name)
+
     relay
     |> cast(attrs, [:name, :url, :description, :banner, :icon, :pubkey, :contact, :supported_nips, :software, :version])
     |> validate_required([:url])
+    |> unique_constraint([:url])
+  end
+
+  def changeset(_relay, _attrs) do
+    {:error, "URL is a required attrs"}
   end
 end
