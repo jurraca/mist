@@ -5,7 +5,7 @@ defmodule Mist.Utils do
 
     case errors do
       [] -> {:ok, Enum.map(oks, fn {:ok, v} -> v end)}
-      errors -> {:error, Enum.map(errors, fn {:error, e} -> e end)}
+      errors -> {:error, errors |> Enum.reject(&is_nil/1) |> Enum.map(fn {:error, e} -> e end)}
     end
   end
 end
