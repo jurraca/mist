@@ -43,8 +43,8 @@ defmodule Mist.Nostr.EventHandler do
   def process_event(%Event{kind: 3, pubkey: pubkey, tags: tags} = event) do
     dbg(event)
     topic = "profiles"
-    Profile.add_follow_list(tags)
-    #Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
+    Profile.add_follow_list(pubkey, tags)
+    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
   end
 
   def process_event(event) do
