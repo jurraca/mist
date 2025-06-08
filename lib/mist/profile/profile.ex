@@ -25,5 +25,6 @@ defmodule Mist.Profile.Profile do
     |> cast(attrs, [:pubkey, :name, :petname, :relay, :about, :picture, :display_name, :website, :banner, :bot])
     |> validate_required([:pubkey])
     |> validate_length(:pubkey, is: 64)
+    |> unique_constraint([:pubkey])
   end
 end
