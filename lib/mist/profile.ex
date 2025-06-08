@@ -247,6 +247,18 @@ defmodule Mist.Profile do
   end
 
   @doc """
+  Fetches profiles that do not have any UserRelays assigned or `relay` items in their profile.
+  """
+  def fetch_profiles_without_relays do
+    from(p in Profile,
+      left_join: ur in Mist.Profile.UserRelays,
+      on: ur.pubkey_id == p.id,
+      where: is_nil(ur.id) and is_nil(p.relay)
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Takes a list of profiles such as a follow list, and returns a map of relays to the profiles that write to them. This is useful to aggregate filters by relay before subscribing.
   """
   def get_write_relays_by_relay(follows) when is_list(follows) do
