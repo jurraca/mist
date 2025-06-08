@@ -68,11 +68,11 @@ defmodule Mist.Profile do
 
   def sub_via_relays(pubkey, [h | _] = relays) do
     with {:ok, _} <- Relay.maybe_connect_relays([h]) do
-      Dispatcher.subscribe_profile(pubkey, send_via: [h])
+      Dispatcher.subscribe_profiles([pubkey], send_via: [h])
     else
       {:error, _} ->
         {connected, _} = Relay.connected(relays)
-        Dispatcher.subscribe_profile(pubkey, send_via: connected)
+        Dispatcher.subscribe_profiles([pubkey], send_via: connected)
 
       err ->
         err

@@ -14,8 +14,12 @@ defmodule Mist.Nostr.Dispatcher do
     {:ok, state, {:continue, nil}}
   end
 
-  def subscribe_profile(pubkey, opts \\ []) do
-    GenServer.cast(__MODULE__, {:subscribe_profile, pubkey, opts})
+  def subscribe_profiles(pubkeys, opts \\ []) do
+    if is_list(pubkeys) do
+      GenServer.cast(__MODULE__, {:subscribe_profile, pubkeys, opts})
+    else
+      GenServer.cast(__MODULE__, {:subscribe_profile, [pubkeys], opts})
+    end
   end
 
   def subscribe_follows(pubkey, opts \\ []) do
@@ -78,13 +82,14 @@ defmodule Mist.Nostr.Dispatcher do
   end
 
   defp subscribe_to_relay_for_authors(relay_url, authors) do
-    filter = [kinds: [0, 10002], authors: authors]
+    filter = [kinds: [0, 3, 10002], authors: authors]
     Nostrbase.send_subscription([filter], send_via: [relay_url])
   end
 
   @impl GenServer
-  def handle_cast({:subscribe_profile, pubkey, opts}, state) do
-    Nostrbase.subscribe_profile(pubkey, send_via: opts[:relays])
+  def handle_cast({:subscribe_profile, pubkeys, opts}, state) do
+    filter = [kinds: [0, 10002], authors: pubkeys]
+    Nostrbase.send_subscription(filter, send_via: opts[:relays])
     {:noreply, state}
   end
 
