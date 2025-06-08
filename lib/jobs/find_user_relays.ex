@@ -1,6 +1,6 @@
 defmodule Mist.Jobs.FindUserRelays do
   alias Mist.Profile
-  alias Mist.Nostr.{Dispatcher, EventHandler}
+  alias Mist.Nostr.EventHandler
 
   require Logger
 

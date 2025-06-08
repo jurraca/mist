@@ -11,11 +11,9 @@ defmodule Mist.Nostr.EventHandler do
   Processes events based on their kind and other attributes using pattern matching.
   """
   def process_event(%Event{kind: 0, pubkey: pubkey} = event) do
-    dbg("DISPATCH RECV ")
-
     with {:ok, content} <- Jason.decode(event.content),
           profile_attrs <- Map.put(content, "pubkey", pubkey),
-         {:ok, profile} <- Profile.create_or_update_profile(profile_attrs) do
+         {:ok, _profile} <- Profile.create_or_update_profile(profile_attrs) do
       :ok
       # Phoenix.PubSub.broadcast(Mist.PubSub, "profiles", profile)
     else

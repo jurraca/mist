@@ -179,7 +179,7 @@ defmodule Mist.Profile do
             |> Map.put(:inserted_at, now)
             |> Map.put(:updated_at, now)
 
-          err ->
+          _err ->
             nil
         end
       end)

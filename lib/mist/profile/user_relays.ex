@@ -3,7 +3,6 @@ defmodule Mist.Profile.UserRelays do
   import Ecto.Changeset
 
   alias Mist.Relay.Relay
-  alias Mist.Repo
   alias Mist.Profile.Profile
 
   schema "user_relays" do
