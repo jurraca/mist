@@ -19,5 +19,6 @@ defmodule Mist.Nostr.Event do
     event
     |> cast(attrs, [:event_id, :pubkey, :created_at, :kind, :tags, :content, :sig])
     |> validate_required([:event_id, :pubkey, :created_at, :kind, :tags, :content, :sig])
+    |> unique_constraint([:event_id])
   end
 end
