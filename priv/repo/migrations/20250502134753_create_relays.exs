@@ -4,6 +4,7 @@ defmodule Mist.Repo.Migrations.CreateRelays do
   def change do
     create table(:relays) do
       add :name, :string
+      add :url, :string
       add :description, :string
       add :banner, :string
       add :icon, :string
@@ -15,5 +16,7 @@ defmodule Mist.Repo.Migrations.CreateRelays do
 
       timestamps(type: :utc_datetime)
     end
+
+    create unique_index(:relays, [:url])
   end
 end

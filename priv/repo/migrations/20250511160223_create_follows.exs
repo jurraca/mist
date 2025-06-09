@@ -11,5 +11,6 @@ defmodule Mist.Repo.Migrations.CreateFollows do
 
     create index(:follows, [:follower_id])
     create index(:follows, [:followed_id])
+    create unique_index(:follows, [:follower_id, :followed_id])
   end
 end

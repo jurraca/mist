@@ -7,11 +7,12 @@ defmodule Mist.Repo.Migrations.AddEventTable do
       add :pubkey, :string
       add :created_at, :integer
       add :kind, :integer
-      add :tags, {:array, :string}
       add :content, :string
       add :sig, :string
 
       timestamps(type: :utc_datetime)
     end
+
+    create unique_index(:events, [:event_id])
   end
 end

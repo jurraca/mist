@@ -14,5 +14,7 @@ defmodule Mist.Repo.Migrations.CreateProfiles do
 
       timestamps(type: :utc_datetime)
     end
+
+    create index(:profiles, [:pubkey], unique: true)
   end
 end
