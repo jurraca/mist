@@ -7,7 +7,7 @@ defmodule Mist.Profile.UserRelays do
 
   schema "user_relays" do
     field :purpose, Ecto.Enum, values: [:r, :w, :rw]
-    belongs_to :pubkey, Profile
+    field :pubkey, :string
     belongs_to :relay, Relay
 
     timestamps(type: :utc_datetime)
@@ -16,9 +16,9 @@ defmodule Mist.Profile.UserRelays do
   @doc false
   def changeset(relay_metadata, attrs) do
     relay_metadata
-    |> cast(attrs, [:relay_id, :pubkey_id, :purpose, :inserted_at, :updated_at])
-    |> validate_required([:relay_id, :pubkey_id, :purpose])
-    |> unique_constraint([:relay_id, :pubkey_id])
+    |> cast(attrs, [:relay_id, :pubkey, :purpose, :inserted_at, :updated_at])
+    |> validate_required([:relay_id, :pubkey, :purpose])
+    |> unique_constraint([:relay_id, :pubkey])
   end
 
   def parse_tag(%{data: relay_url} = tag) do

@@ -1,6 +1,7 @@
 defmodule Mist.Profile.Profile do
   use Ecto.Schema
   import Ecto.Changeset
+  alias Mist.Profile.UserRelays
 
   schema "profiles" do
     field :name, :string
@@ -15,6 +16,7 @@ defmodule Mist.Profile.Profile do
     field :bot, :boolean, default: false
     many_to_many :following, __MODULE__, join_through: "follows", join_keys: [follower_id: :id, followed_id: :id]
     many_to_many :followers, __MODULE__, join_through: "follows", join_keys: [followed_id: :id, follower_id: :id]
+    has_many :user_relays, UserRelays, references: :pubkey, foreign_key: :pubkey
 
     timestamps(type: :utc_datetime)
   end

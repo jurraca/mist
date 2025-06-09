@@ -1,9 +1,10 @@
 defmodule Mist.Nostr.Tags do
   use Ecto.Schema
   import Ecto.Changeset
+  alias Mist.Nostr.Event
 
   schema "tags" do
-    field :event_id, :string
+    belongs_to :event, Event
     field :key, :string
     field :value, :string
     field :rest, {:array, :string}
