@@ -30,6 +30,6 @@ defmodule Mist.Nostr.Event do
   def format_attrs(%{"id" => event_id, "content" => content} = attrs) do
     attrs
     |> Map.put("event_id", event_id)
-    |> Map.update!("content", fn x -> if(content == "", do: nil, else: content) end)
+    |> Map.update!("content", fn content -> if(content == "", do: nil, else: content) end)
   end
 end

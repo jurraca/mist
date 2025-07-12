@@ -4,6 +4,8 @@ defmodule Mist.Jobs.FindUserRelays do
 
   require Logger
 
+  @directories ["wss://purplepag.es"]
+
   @popular_relays [
     "wss://nos.lol",
     "wss://relay.damus.io",
@@ -15,49 +17,60 @@ defmodule Mist.Jobs.FindUserRelays do
 
   def run do
     Profile.fetch_profiles_without_relays()
-    |> Enum.map(&Map.get(&1, :pubkey))
-    |> Enum.take(100)
-    |> subscribe()
-  end
+    |> batch_and_subscribe(@directories)
 
-  defp subscribe(pubkeys) do
-    Task.start(fn ->
-      subscribe_and_handle(pubkeys, @kinds)
-    end)
-  end
-
-  defp subscribe_and_handle(pubkeys, kinds) do
-    Logger.info("Starting subscription task.")
-    filter = [authors: pubkeys, kinds: kinds, limit: 50]
-
-    case Mist.Relay.maybe_connect_relays(@popular_relays) do
-      {:ok, _} ->
-        case Nostrbase.send_subscription(filter, send_via: @popular_relays) do
-          {:ok, sub_id} ->
-            Logger.info("Subscribed with sub_id: #{sub_id}")
-            handle_in()
-
-          {:error, reason} ->
-            Logger.error("Failed to subscribe: #{inspect(reason)}")
-        end
-
-      {:error, reason} ->
-        Logger.error("Failed to connect to relay: #{inspect(reason)}")
+    # After directory search, check for remaining profiles and search popular relays
+    profiles_left = Profile.fetch_profiles_without_relays()
+    count = Enum.count(profiles_left)
+    if count > 0 do
+       Logger.info("Finished searching initial directories, #{count} profiles left to find. Searching popular relays...")
+       profiles_left |> batch_and_subscribe(@popular_relays)
     end
   end
 
-  defp handle_in(count \\ 0)
-  defp handle_in(4) do
-    Logger.info("Finished subscription task")
-    :ok
+  defp batch_and_subscribe(profiles, relays) do
+    profiles
+    |> Enum.map(&Map.get(&1, :pubkey))
+    |> Enum.chunk_every(100)
+    |> Enum.each(fn batch -> subscribe_batch(batch, relays) end)
   end
 
-  defp handle_in(count) do
+  defp subscribe_batch(pubkeys, relay_list) do
+    Task.start(fn ->
+      subscribe_and_handle_events(pubkeys, relay_list)
+    end)
+  end
+
+  defp subscribe_and_handle_events(pubkeys, relay_list) do
+    Logger.info("Starting subscription for #{length(pubkeys)} pubkeys on #{inspect(relay_list)}")
+    filter = [authors: pubkeys, kinds: @kinds]
+
+    case Mist.Relay.maybe_connect_relays(relay_list) do
+      {:ok, _} ->
+        case Nostrbase.send_subscription(filter, send_via: relay_list) do
+          {:ok, sub_id} ->
+            Logger.info("Subscribed to relays with sub_id: #{sub_id}")
+            handle_events(sub_id, relay_list)
+
+          {:error, reason} ->
+            Logger.error("Failed to subscribe to relays: #{inspect(reason)}")
+        end
+
+      {:error, reason} ->
+        Logger.error("Failed to connect to relays: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_events(sub_id, relay_list) do
+    handle_events(sub_id, relay_list, 0, 0)
+  end
+
+  defp handle_events(sub_id, relay_list, event_count, eose_count) do
     receive do
-      {:event, _sub_id, event} ->
+      {:event, ^sub_id, event} ->
         case event.kind do
           10002 ->
-            Logger.info("Processing kind 10002 event from: #{event.pubkey}")
+            Logger.info("Processing kind 10002 event: #{event.pubkey}")
             EventHandler.process_event(event)
 
           _ ->
@@ -65,16 +78,31 @@ defmodule Mist.Jobs.FindUserRelays do
             EventHandler.process_event(event)
         end
 
-        handle_in(0)
+        new_event_count = event_count + 1
 
-      {:eose, sub_id, relay_host} ->
-        Logger.info("End of stored events")
-        Nostrbase.close_sub("wss://" <> relay_host, sub_id)
-        handle_in(count + 1)
+        if new_event_count >= 100 do
+          Logger.info("Processed 100 events, closing subscription")
+          Nostrbase.close_sub(sub_id)
+          :ok
+        else
+          handle_events(sub_id, relay_list, new_event_count, eose_count)
+        end
+
+      {:eose, ^sub_id, relay_host} ->
+        Logger.info("End of stored events from #{relay_host} (#{event_count} events processed)")
+        new_eose_count = eose_count + 1
+
+        if new_eose_count >= length(relay_list) do
+          Logger.info("Finished subscription task - received EOSE from all relays")
+          Nostrbase.close_sub(sub_id)
+          :ok
+        else
+          handle_events(sub_id, relay_list, event_count, new_eose_count)
+        end
 
       other ->
         Logger.debug("Received: #{inspect(other)}")
-        handle_in()
+        handle_events(sub_id, relay_list, event_count, eose_count)
     end
   end
 end
