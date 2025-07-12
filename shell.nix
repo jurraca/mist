@@ -8,7 +8,6 @@
   basePackages = with pkgs; [
     elixir
     hex
-    mix2nix
     postgresql
     esbuild
     tailwindcss

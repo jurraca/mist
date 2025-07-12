@@ -10,15 +10,10 @@
     nixpkgs,
   }: let
     overlay = prev: final: rec {
-      # https://github.com/erlang/otp/security/advisories/GHSA-37cp-fgq5-7wc2
       erlang = prev.beam.interpreters.erlang_27;
       beamPackages = prev.beam.packagesWith erlang;
       elixir = beamPackages.elixir_1_18;
       hex = beamPackages.hex;
-      final.mix2nix = prev.mix2nix.overrideAttrs {
-        nativeBuildInputs = [final.elixir];
-        buildInputs = [final.erlang];
-      };
     };
 
     forAllSystems = nixpkgs.lib.genAttrs [
