@@ -47,7 +47,7 @@ defmodule Mist.Jobs.FindUserRelays do
 
     case Mist.Relay.maybe_connect_relays(relay_list) do
       {:ok, _} ->
-        case Nostrbase.send_subscription(filter, send_via: relay_list) do
+        case NostrEx.send_subscription(filter, send_via: relay_list) do
           {:ok, sub_id} ->
             Logger.info("Subscribed to relays with sub_id: #{sub_id}")
             handle_events(sub_id, relay_list)
@@ -82,7 +82,7 @@ defmodule Mist.Jobs.FindUserRelays do
 
         if new_event_count >= 100 do
           Logger.info("Processed 100 events, closing subscription")
-          Nostrbase.close_sub(sub_id)
+          NostrEx.close_sub(sub_id)
           :ok
         else
           handle_events(sub_id, relay_list, new_event_count, eose_count)
@@ -94,7 +94,7 @@ defmodule Mist.Jobs.FindUserRelays do
 
         if new_eose_count >= length(relay_list) do
           Logger.info("Finished subscription task - received EOSE from all relays")
-          Nostrbase.close_sub(sub_id)
+          NostrEx.close_subscription(sub_id)
           :ok
         else
           handle_events(sub_id, relay_list, event_count, new_eose_count)

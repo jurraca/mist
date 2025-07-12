@@ -2,7 +2,7 @@ defmodule MistWeb.RelayLive.Index do
   use MistWeb, :live_view
 
   alias Mist.Relay
-  alias Nostrbase.RelayManager
+  alias NostrEx.RelayManager
 
   @impl true
   def mount(_params, _session, socket) do

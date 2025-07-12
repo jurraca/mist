@@ -58,7 +58,7 @@ defmodule MistWeb.ProfileLive.Manage do
     }
 
     with {:ok, event} <- Signer.sign_event(event_params),
-         :ok <- Nostrbase.send_event(event),
+         :ok <- NostrEx.send_event(event),
          {:ok, profile} <- Profile.update_profile(socket.assigns.profile, params) do
       {:noreply,
        socket

@@ -57,7 +57,7 @@ defmodule Mist.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
       {:tidewave, "~> 0.1", only: :dev},
-      {:nostrbase, path: "/home/base/code/nostrbase"}
+      {:nostr_ex, github: "jurraca/nostr_ex"}
     ]
   end
 
