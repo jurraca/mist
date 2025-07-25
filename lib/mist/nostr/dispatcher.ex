@@ -1,3 +1,4 @@
+
 defmodule Mist.Nostr.Dispatcher do
   use GenServer
   require Logger
@@ -14,27 +15,31 @@ defmodule Mist.Nostr.Dispatcher do
     {:ok, state, {:continue, nil}}
   end
 
+  def subscribe(filters, opts \\ []) when is_list(filters) do
+    GenServer.cast(__MODULE__, {:subscribe, filters, opts})
+  end
+
   def subscribe_profiles(pubkeys, opts \\ []) do
-    if is_list(pubkeys) do
-      GenServer.cast(__MODULE__, {:subscribe_profile, pubkeys, opts})
-    else
-      GenServer.cast(__MODULE__, {:subscribe_profile, [pubkeys], opts})
-    end
+    pubkeys = if is_list(pubkeys), do: pubkeys, else: [pubkeys]
+    filters = [%{kinds: [0, 10002], authors: pubkeys}]
+    subscribe(filters, opts)
   end
 
   def subscribe_follows(pubkey, opts \\ []) do
-    GenServer.cast(__MODULE__, {:subscribe_follows, pubkey, opts})
+    filters = [%{kinds: [3], authors: [pubkey]}]
+    subscribe(filters, opts)
   end
 
   def subscribe_notes(pubkey, opts \\ []) do
-    GenServer.cast(__MODULE__, {:subscribe_notes, pubkey, opts})
+    filters = [%{kinds: [1], authors: [pubkey]}]
+    subscribe(filters, opts)
   end
 
   @impl GenServer
   def handle_continue(_arg, state) do
     case wait_for_signer_ready() do
       :ok ->
-        subscribe_to_follows_events()
+        setup_follows_subscription()
         {:noreply, state}
       :timeout ->
         Logger.warning("Signer not ready after timeout, skipping follows subscription")
@@ -54,55 +59,40 @@ defmodule Mist.Nostr.Dispatcher do
     end
   end
 
-  defp subscribe_to_follows_events do
+  defp setup_follows_subscription do
     with {:ok, %Profile.Profile{} = my_profile} <- Profile.get_my_profile(),
-        write_relay_map = Profile.get_write_relays_by_relay(my_profile.following) do
+         write_relay_map when map_size(write_relay_map) > 0 <- Profile.get_write_relays_by_relay(my_profile.following) do
 
-        case write_relay_map |> Map.keys() |> Mist.Relay.maybe_connect_relays() do
-          {:ok, _} ->
-            sub_ids = Enum.map(write_relay_map, fn {relay_url, authors} ->
-              case subscribe_to_relay_for_authors(relay_url, authors) do
-                {:ok, sub_id} ->
-                  Logger.debug("Subscribed to #{relay_url} for #{length(authors)} authors")
-                  sub_id
-                {:error, reason} ->
-                  Logger.debug(reason)
-              end
+      relay_urls = Map.keys(write_relay_map)
+      case Mist.Relay.maybe_connect_relays(relay_urls) do
+        {:ok, _} ->
+          Enum.each(write_relay_map, fn {relay_url, authors} ->
+            filters = [%{kinds: [0, 3, 10002], authors: authors}]
+            subscribe(filters, relays: [relay_url])
+            Logger.debug("Subscribed to #{relay_url} for #{length(authors)} authors")
           end)
 
-            {:ok, sub_ids}
-
-          {:error, reason} ->
-            Logger.debug(reason)
-        end
-      else
+        {:error, reason} ->
+          Logger.debug("Failed to connect to relays: #{inspect(reason)}")
+      end
+    else
       {:error, _} ->
         Logger.debug("No profile set, skipping follows subscription")
+      %{} ->
+        Logger.debug("No write relays found for follows")
     end
   end
 
-  defp subscribe_to_relay_for_authors(relay_url, authors) do
-    filter = [kinds: [0, 3, 10002], authors: authors]
-    NostrEx.send_subscription([filter], send_via: [relay_url])
-  end
-
   @impl GenServer
-  def handle_cast({:subscribe_profile, pubkeys, opts}, state) do
-    filter = [kinds: [0, 10002], authors: pubkeys]
-    NostrEx.send_subscription(filter, send_via: opts[:relays])
-    {:noreply, state}
-  end
-
-  @impl GenServer
-  def handle_cast({:subscribe_follows, pubkey, opts}, state) do
-    NostrEx.subscribe_follows(pubkey, send_via: opts[:relays])
-    {:noreply, state}
-  end
-
-  @impl GenServer
-  def handle_cast({:subscribe_notes, pubkey, opts}, state) do
-    NostrEx.subscribe_notes(pubkey, send_via: opts[:relays])
-    {:noreply, state}
+  def handle_cast({:subscribe, filters, opts}, state) do
+    case NostrEx.send_subscription(filters, send_via: opts[:relays]) do
+      {:ok, sub_id} ->
+        Logger.debug("Created subscription #{sub_id} with #{length(filters)} filters")
+        {:noreply, state}
+      {:error, reason} ->
+        Logger.error("Failed to create subscription: #{inspect(reason)}")
+        {:noreply, state}
+    end
   end
 
   @impl GenServer
