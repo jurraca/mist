@@ -19,7 +19,6 @@ defmodule Mist.Jobs.FindUserRelays do
     Profile.fetch_profiles_without_relays()
     |> batch_and_subscribe(@directories)
 
-    # After directory search, check for remaining profiles and search popular relays
     profiles_left = Profile.fetch_profiles_without_relays()
     count = Enum.count(profiles_left)
     if count > 0 do

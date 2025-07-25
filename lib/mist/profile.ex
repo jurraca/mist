@@ -259,6 +259,29 @@ defmodule Mist.Profile do
   end
 
   @doc """
+  Fetches profiles for relay discovery, prioritizing those never checked or checked long ago.
+  """
+  def fetch_profiles_for_relay_discovery(limit \\ 50) do
+    # Get profiles that haven't been checked in the last 24 hours or never checked
+    cutoff = DateTime.utc_now() |> DateTime.add(-24, :hour)
+    
+    from(p in Profile,
+      where: is_nil(p.relay_last_checked) or p.relay_last_checked < ^cutoff,
+      order_by: [asc: p.relay_last_checked],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Updates the last relay check timestamp for a profile.
+  """
+  def update_relay_check_timestamp(pubkey) do
+    from(p in Profile, where: p.pubkey == ^pubkey)
+    |> Repo.update_all(set: [relay_last_checked: DateTime.utc_now()])
+  end
+
+  @doc """
   Takes a list of profiles such as a follow list, and returns a map of relays to the profiles that write to them. This is useful to aggregate filters by relay before subscribing.
   """
   def get_write_relays_by_relay(follows) when is_list(follows) do

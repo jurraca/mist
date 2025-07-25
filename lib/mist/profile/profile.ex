@@ -14,6 +14,7 @@ defmodule Mist.Profile.Profile do
     field :website, :string
     field :banner, :string
     field :bot, :boolean, default: false
+    field :relay_last_checked, :utc_datetime
     many_to_many :following, __MODULE__, join_through: "follows", join_keys: [follower_id: :id, followed_id: :id]
     many_to_many :followers, __MODULE__, join_through: "follows", join_keys: [followed_id: :id, follower_id: :id]
     has_many :user_relays, UserRelays, references: :pubkey, foreign_key: :pubkey
