@@ -27,7 +27,7 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   @impl true
-  def handle_info(%Nostr.Event{content: content} = note, socket) do
+  def handle_info(%Nostr.Event{} = note, socket) do
     {:noreply, stream_insert(socket, :notes, %{
       id: note.id,
       pubkey: note.pubkey,
