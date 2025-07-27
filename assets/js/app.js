@@ -23,9 +23,37 @@ import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+import "./network_graph.js"
+
+let Hooks = {}
+Hooks.NetworkGraph = {
+  mounted() {
+    this.graph = new NetworkGraph(`#${this.el.id}`)
+    this.updateGraph()
+  },
+  
+  updated() {
+    this.updateGraph()
+  },
+  
+  updateGraph() {
+    const graphData = JSON.parse(this.el.dataset.graph)
+    if (graphData.nodes.length > 0) {
+      this.graph.render(graphData)
+    }
+  },
+  
+  destroyed() {
+    if (this.graph) {
+      this.graph.destroy()
+    }
+  }
+}
+
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: {_csrf_token: csrfToken}
+  params: {_csrf_token: csrfToken},
+  hooks: Hooks
 })
 
 // Show progress bar on live navigation and form submits

@@ -6,17 +6,44 @@
       Real-time Nostr notes from connected relays
     </:subtitle>
     <:actions>
-      <.link patch={~p"/notes/new"}>
-        <button class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:scale-105">
-          <.icon name="hero-plus-mini" class="w-4 h-4" />
-          New Note
-        </button>
-      </.link>
+      <div class="flex items-center gap-4">
+        <div class="flex bg-dark-tertiary rounded-lg p-1">
+          <button 
+            phx-click="toggle_view" 
+            phx-value-mode="list"
+            class={["px-3 py-1 rounded text-sm transition-all", 
+                    @view_mode == :list && "bg-neon-green text-dark-primary" || "text-text-secondary hover:text-text-primary"]}
+          >
+            List
+          </button>
+          <button 
+            phx-click="toggle_view" 
+            phx-value-mode="graph"
+            class={["px-3 py-1 rounded text-sm transition-all", 
+                    @view_mode == :graph && "bg-neon-green text-dark-primary" || "text-text-secondary hover:text-text-primary"]}
+          >
+            Graph
+          </button>
+        </div>
+        <.link patch={~p"/notes/new"}>
+          <button class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:scale-105">
+            <.icon name="hero-plus-mini" class="w-4 h-4" />
+            New Note
+          </button>
+        </.link>
+      </div>
     </:actions>
   </.header>
 
   <div class="space-y-4">
-    <div id="notes" phx-update="stream" class="space-y-4">
+    <div :if={@view_mode == :graph} 
+         id="graph-container" 
+         class="bg-dark-secondary border border-dark-border rounded-lg"
+         phx-hook="NetworkGraph"
+         data-graph={Jason.encode!(@graph_data)}>
+    </div>
+    
+    <div :if={@view_mode == :list} id="notes" phx-update="stream" class="space-y-4">
       <div :for={{dom_id, note} <- @streams.notes} id={dom_id} class="note-card">
         <div class="space-y-3">
           <div class="flex items-start justify-between">
