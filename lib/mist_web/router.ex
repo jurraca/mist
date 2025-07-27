@@ -17,10 +17,12 @@ defmodule MistWeb.Router do
   scope "/", MistWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", NoteLive.Index, :index
+    get "/home", PageController, :home
     live "/relays", RelayLive.Index, :index
     live "/relays/new", RelayLive.Index, :new
     live "/notes", NoteLive.Index, :index
+    live "/notes/new", NoteLive.Index, :new
     live "/profiles", ProfileLive.Index, :index
     live "/profiles/new", ProfileLive.Index, :new
     live "/profiles/:id", ProfileLive.Index, :show
