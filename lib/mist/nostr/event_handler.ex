@@ -35,7 +35,7 @@ defmodule Mist.Nostr.EventHandler do
   def process_event(%Event{kind: 1} = event) do
     topic = "notes"
     # Write to a kind-1-only DB table
-    # Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
+    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
   end
 
   def process_event(%Event{kind: 3, pubkey: pubkey, tags: tags} = event) do

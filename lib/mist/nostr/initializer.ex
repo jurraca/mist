@@ -1,4 +1,3 @@
-
 defmodule Mist.Nostr.Initializer do
   @moduledoc """
   Handles initialization tasks for the Nostr application.

@@ -5,7 +5,8 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-      {:ok, stream(socket, :notes, [])}
+    Phoenix.PubSub.subscribe(Mist.PubSub, "notes")
+    {:ok, stream(socket, :notes, [])}
   end
 
   @impl true
@@ -26,14 +27,15 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   @impl true
-  def handle_info(%{event: "note", payload: note}, socket) do
+  def handle_info(%Nostr.Event{content: content} = note, socket) do
     {:noreply, stream_insert(socket, :notes, %{
       id: note.id,
       pubkey: note.pubkey,
       content: note.content
-    })}
+    }, at: 0)}
   end
 
+  @impl true
   def handle_info({MistWeb.NoteLive.FormComponent, {:saved, note}}, socket) do
     {:noreply, stream_insert(socket, :notes, note)}
   end
