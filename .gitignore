@@ -37,3 +37,4 @@ npm-debug.log
 
 .nix-mix
 .replit
+mist_dev.db*
