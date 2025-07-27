@@ -1,5 +1,299 @@
+
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
-/* This file is for your main application CSS */
+/* Custom CSS Variables for Dark Theme */
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2a2a2a;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --text-muted: #606060;
+  --accent-neon: #00ff88;
+  --accent-purple: #8b5cf6;
+  --accent-blue: #3b82f6;
+  --accent-pink: #ec4899;
+  --border-dark: #333333;
+  --border-light: #404040;
+  --shadow-neon: 0 0 10px rgba(0, 255, 136, 0.3);
+  --shadow-subtle: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+}
+
+/* Base styles */
+* {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+h1 {
+  font-size: 1.875rem;
+  color: var(--accent-neon);
+  text-shadow: var(--shadow-neon);
+}
+
+h2 {
+  font-size: 1.5rem;
+}
+
+h3 {
+  font-size: 1.25rem;
+}
+
+/* Links */
+a {
+  color: var(--accent-neon);
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+a:hover {
+  color: var(--accent-purple);
+  text-shadow: 0 0 5px currentColor;
+}
+
+/* Form elements */
+input, textarea, select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-dark);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 0.75rem;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent-neon);
+  box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.2);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* Buttons */
+button, .btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+button:hover, .btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-neon);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-subtle);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-neon), var(--accent-purple));
+  border: none;
+  color: var(--bg-primary);
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-neon));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 255, 136, 0.3);
+}
+
+/* Cards and containers */
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-dark);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-subtle);
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Navigation */
+.nav-link {
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  color: var(--accent-neon);
+  background: var(--bg-secondary);
+}
+
+.nav-link.active {
+  color: var(--accent-neon);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+}
+
+/* Code and monospace elements */
+code, .mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+  background: var(--bg-tertiary);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  color: var(--accent-neon);
+  font-size: 0.875em;
+}
+
+pre {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-dark);
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+  color: var(--text-primary);
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th, td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-dark);
+}
+
+th {
+  background: var(--bg-tertiary);
+  color: var(--accent-neon);
+  font-weight: 600;
+}
+
+tr:hover {
+  background: var(--bg-tertiary);
+}
+
+/* Specific component styles */
+.note-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-dark);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  transition: all 0.2s ease;
+}
+
+.note-card:hover {
+  border-color: var(--accent-neon);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.1);
+}
+
+.pubkey, .note-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.note-content {
+  color: var(--text-primary);
+  line-height: 1.7;
+  margin: 1rem 0;
+  white-space: pre-wrap;
+}
+
+/* Status indicators */
+.status-online {
+  color: var(--accent-neon);
+  text-shadow: 0 0 5px currentColor;
+}
+
+.status-offline {
+  color: var(--text-muted);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-light);
+}
+
+/* Loading states */
+.loading {
+  opacity: 0.6;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Utility classes */
+.text-neon {
+  color: var(--accent-neon);
+  text-shadow: 0 0 5px currentColor;
+}
+
+.text-purple {
+  color: var(--accent-purple);
+}
+
+.text-blue {
+  color: var(--accent-blue);
+}
+
+.text-pink {
+  color: var(--accent-pink);
+}
+
+.glow {
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+.border-glow {
+  border: 1px solid var(--accent-neon);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.2);
+}

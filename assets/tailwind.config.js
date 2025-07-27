@@ -1,3 +1,4 @@
+
 // See the Tailwind configuration guide for advanced usage
 // https://tailwindcss.com/docs/configuration
 
@@ -11,10 +12,47 @@ module.exports = {
     "../lib/mist_web.ex",
     "../lib/mist_web/**/*.*ex"
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        brand: "#FD4F00",
+        brand: "#00ff88",
+        dark: {
+          primary: "#0a0a0a",
+          secondary: "#1a1a1a", 
+          tertiary: "#2a2a2a",
+          border: "#333333",
+          "border-light": "#404040"
+        },
+        neon: {
+          green: "#00ff88",
+          purple: "#8b5cf6",
+          blue: "#3b82f6",
+          pink: "#ec4899"
+        },
+        text: {
+          primary: "#e0e0e0",
+          secondary: "#a0a0a0",
+          muted: "#606060"
+        }
+      },
+      fontFamily: {
+        mono: ['JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', 'monospace'],
+        sans: ['JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', 'monospace']
+      },
+      boxShadow: {
+        'neon': '0 0 10px rgba(0, 255, 136, 0.3)',
+        'neon-lg': '0 0 20px rgba(0, 255, 136, 0.3)',
+        'dark': '0 4px 6px -1px rgba(0, 0, 0, 0.5)'
+      },
+      animation: {
+        'glow': 'glow 2s ease-in-out infinite alternate',
+      },
+      keyframes: {
+        glow: {
+          '0%': { boxShadow: '0 0 5px rgba(0, 255, 136, 0.5)' },
+          '100%': { boxShadow: '0 0 20px rgba(0, 255, 136, 0.8)' }
+        }
       }
     },
   },

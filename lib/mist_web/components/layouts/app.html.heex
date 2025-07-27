@@ -1,31 +1,38 @@
-<header class="px-4 sm:px-6 lg:px-8">
-  <div class="flex items-center justify-between border-b border-zinc-100 py-3 text-sm">
-    <div class="flex items-center gap-4">
-      <a href="/">
-        <img src={~p"/images/logo.svg"} width="36" />
+
+<header class="px-4 sm:px-6 lg:px-8 bg-dark-secondary border-b border-dark-border">
+  <div class="flex items-center justify-between py-4 text-sm">
+    <div class="flex items-center gap-6">
+      <a href="/" class="flex items-center gap-2 group">
+        <div class="w-8 h-8 bg-gradient-to-br from-neon-green to-neon-purple rounded-lg flex items-center justify-center font-bold text-dark-primary">
+          M
+        </div>
+        <span class="text-xl font-bold text-neon-green group-hover:text-neon-purple transition-colors">MIST</span>
       </a>
-      <p class="bg-brand/5 text-brand rounded-full px-2 font-medium leading-6">
-        v{Application.spec(:phoenix, :vsn)}
-      </p>
+      <nav class="flex items-center gap-4">
+        <.link navigate={~p"/notes"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
+          Notes
+        </.link>
+        <.link navigate={~p"/relays"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
+          Relays
+        </.link>
+        <.link navigate={~p"/profiles"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
+          Profiles
+        </.link>
+      </nav>
     </div>
-    <div class="flex items-center gap-4 font-semibold leading-6 text-zinc-900">
-      <a href="https://twitter.com/elixirphoenix" class="hover:text-zinc-700">
-        @elixirphoenix
-      </a>
-      <a href="https://github.com/phoenixframework/phoenix" class="hover:text-zinc-700">
-        GitHub
-      </a>
-      <a
-        href="https://hexdocs.pm/phoenix/overview.html"
-        class="rounded-lg bg-zinc-100 px-2 py-1 hover:bg-zinc-200/80"
-      >
-        Get Started <span aria-hidden="true">&rarr;</span>
+    <div class="flex items-center gap-4">
+      <div class="text-xs text-text-muted font-mono">
+        v{Application.spec(:phoenix, :vsn)}
+      </div>
+      <a href="https://github.com/nostr-protocol/nostr" 
+         class="text-text-secondary hover:text-neon-green transition-colors">
+        Nostr Protocol
       </a>
     </div>
   </div>
 </header>
-<main class="px-4 py-20 sm:px-6 lg:px-8">
-  <div class="mx-auto max-w-2xl">
+<main class="min-h-screen bg-dark-primary">
+  <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
     <.flash_group flash={@flash} />
     {@inner_content}
   </div>
