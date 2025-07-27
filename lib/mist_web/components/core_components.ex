@@ -270,6 +270,21 @@ defmodule MistWeb.CoreComponents do
   slot :inner_block
 
   def input(assigns) do
+    assigns =
+      assigns
+      |> assign_new(:name, fn ->
+        if assigns[:field], do: assigns.field.name, else: assigns[:name]
+      end)
+      |> assign_new(:id, fn ->
+        if assigns[:field], do: assigns.field.id, else: assigns[:id]
+      end)
+      |> assign_new(:value, fn ->
+        if assigns[:field], do: assigns.field.value, else: assigns[:value]
+      end)
+      |> assign_new(:errors, fn ->
+        if assigns[:field], do: Enum.map(assigns.field.errors, &translate_error/1), else: []
+      end)
+
     ~H"""
     <div phx-feedback-for={@name}>
       <.label for={@id}>{@label}</.label>
