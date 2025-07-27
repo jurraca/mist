@@ -290,7 +290,7 @@ defmodule Mist.Profile do
     query =
       from ur in Mist.Profile.UserRelays,
         join: p in Mist.Profile.Profile,
-        on: ur.pubkey_id == p.id,
+        on: ur.pubkey == p.pubkey,
         join: r in Mist.Relay.Relay,
         on: ur.relay_id == r.id,
         where: p.pubkey in ^follow_pubkeys and ur.purpose in [:w, :rw],
