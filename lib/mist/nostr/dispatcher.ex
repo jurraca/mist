@@ -52,7 +52,8 @@ defmodule Mist.Nostr.Dispatcher do
   end
 
   @impl GenServer
-  def handle_info("EOSE", state) do
+  def handle_info({:eose, sub_id, _relay}, state) do
+    Logger.info("EOSE for #{sub_id}")
     {:noreply, state}
   end
 
