@@ -9,7 +9,7 @@ defmodule MistWeb.ProfileLive.Manage do
     case Keys.get_private_key() do
       {:ok, _priv_key} ->
         {:ok, pubkey} = Keys.derive_public_key()
-        profile = Profile.get_or_create_profile(pubkey)
+        {:ok, profile} = Profile.get_or_create_profile(pubkey)
 
         {:ok,
          assign(socket,

@@ -21,7 +21,7 @@ defmodule Mist.Nostr.Initializer do
   def handle_continue(:initialize, state) do
     case wait_for_signer_ready() do
       :ok ->
-        setup_follows_subscription()
+        #setup_follows_subscription()
         {:noreply, state}
       :timeout ->
         Logger.warning("Signer not ready after timeout, skipping follows subscription")
