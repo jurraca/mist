@@ -75,7 +75,7 @@ defmodule MistWeb.NoteLive.Index do
   defp extract_reply_links(note) do
     note.tags
     |> Enum.filter(fn tag -> tag.type == "e" end)
-    |> Enum.map(fn [_type, referenced_note_id | _rest] ->
+    |> Enum.map(fn %{data: referenced_note_id, info: _rest} ->
       %{
         source: referenced_note_id,
         target: note.id,
