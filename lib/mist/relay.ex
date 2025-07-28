@@ -36,7 +36,7 @@ defmodule Mist.Relay do
 
   def connect_relays(relay_list) when is_list(relay_list) do
     relay_list
-    |> Enum.map(fn relay_url -> Task.async(fn -> NostrEx.add_relay(relay_url) end) end)
+    |> Enum.map(fn relay_url -> Task.async(fn -> NostrEx.connect_relay(relay_url) end) end)
     |> Task.yield_many(timeout: 3_000)
     |> Enum.map(fn {task, output} ->
       output || Task.ignore(task)
