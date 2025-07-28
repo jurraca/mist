@@ -41,7 +41,7 @@ defmodule Mist.Nostr.Initializer do
       case Mist.Relay.maybe_connect_relays(relay_urls) do
         {:ok, _} ->
           Enum.each(write_relay_map, fn {relay_url, authors} ->
-            filters = [%{kinds: [0, 3, 10002], authors: authors}]
+            filters = [kinds: [0, 3, 10002], authors: authors]
             Dispatcher.subscribe(filters, relays: [relay_url])
             Logger.debug("Subscribed to #{relay_url} for #{length(authors)} authors")
           end)
