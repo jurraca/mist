@@ -10,33 +10,22 @@
 
   <div class="mt-8">
     <div id="relays" class="space-y-4">
-      <div :for={{id, relay} <- @relays} id={id} class="p-4 bg-dark-secondary border border-dark-border shadow-dark rounded-lg">
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <h3 class="font-medium text-text-primary truncate"><%= relay.url %></h3>
+      <div :for={{id, relay} <- @relays} id={id} class="p-4 bg-dark-secondary border border-dark-border shadow-dark rounded-lg relay-box">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <button class="dropdown-toggle flex items-center gap-2 text-left flex-1 min-w-0" onclick="toggleRelayInfo(this)">
+              <svg class="dropdown-arrow w-4 h-4 text-text-secondary transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+              </svg>
+              <h3 class="font-medium text-text-primary truncate">
+                <%= if relay.relay_info && Map.get(relay.relay_info, "name") do %>
+                  <%= relay.relay_info["name"] %>
+                <% else %>
+                  <%= relay.url %>
+                <% end %>
+              </h3>
               <span class="flex w-2 h-2 bg-neon-green rounded-full flex-shrink-0"></span>
-            </div>
-            <div class="mt-2 text-sm text-text-secondary">
-              <ul class="space-y-1">
-                <%= if relay.relay_info do %>
-              <%= for {k, v} <- relay.relay_info do %>
-                <%= if is_binary(v) and v != "" do %>
-                  <li class="flex items-center gap-1">
-                    <span class="font-medium text-text-primary"><%= k %>:</span>
-                    <span class="break-words"><%= v %></span>
-                  </li>
-                <% end %>
-                <%= if is_list(v) do %>
-                  <li class="flex items-center gap-1">
-                    <span class="font-medium text-text-primary"><%= k %>:</span>
-                    <span class="break-words"><%= Enum.join(v, ", ") %></span>
-                  </li>
-                <% end %>
-              <% end %>
-              <% end %>
-              </ul>
-            </div>
+            </button>
           </div>
           <div class="flex-shrink-0">
             <.link
@@ -48,9 +37,61 @@
             </.link>
           </div>
         </div>
+        
+        <div class="relay-details mt-3 overflow-hidden" style="max-height: 0; opacity: 0; transition: all 0.3s ease-out;">
+          <div class="pt-2 border-t border-dark-border">
+            <div class="text-xs text-text-muted mb-2">
+              <span class="font-medium">URL:</span> <%= relay.url %>
+            </div>
+            <%= if relay.relay_info do %>
+              <div class="text-sm text-text-secondary">
+                <ul class="space-y-1">
+                  <%= for {k, v} <- relay.relay_info do %>
+                    <%= if k != "name" do %>
+                      <%= if is_binary(v) and v != "" do %>
+                        <li class="flex items-start gap-1">
+                          <span class="font-medium text-text-primary flex-shrink-0"><%= k %>:</span>
+                          <span class="break-words"><%= v %></span>
+                        </li>
+                      <% end %>
+                      <%= if is_list(v) do %>
+                        <li class="flex items-start gap-1">
+                          <span class="font-medium text-text-primary flex-shrink-0"><%= k %>:</span>
+                          <span class="break-words"><%= Enum.join(v, ", ") %></span>
+                        </li>
+                      <% end %>
+                    <% end %>
+                  <% end %>
+                </ul>
+              </div>
+            <% else %>
+              <div class="text-sm text-text-muted">No relay information available</div>
+            <% end %>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+
+  <script>
+    function toggleRelayInfo(button) {
+      const relayBox = button.closest('.relay-box');
+      const details = relayBox.querySelector('.relay-details');
+      const arrow = button.querySelector('.dropdown-arrow');
+      
+      if (details.style.maxHeight === '0px' || details.style.maxHeight === '') {
+        // Expand
+        details.style.maxHeight = details.scrollHeight + 'px';
+        details.style.opacity = '1';
+        arrow.style.transform = 'rotate(90deg)';
+      } else {
+        // Collapse
+        details.style.maxHeight = '0px';
+        details.style.opacity = '0';
+        arrow.style.transform = 'rotate(0deg)';
+      }
+    }
+  </script>
 </div>
 
 <.modal :if={@live_action == :new} id="relay-modal" show on_cancel={JS.patch(~p"/relays")}>
