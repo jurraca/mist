@@ -3,7 +3,6 @@ defmodule Mist.Profile.UserRelays do
   import Ecto.Changeset
 
   alias Mist.Relay.Relay
-  alias Mist.Profile.Profile
 
   schema "user_relays" do
     field :purpose, Ecto.Enum, values: [:r, :w, :rw]
@@ -21,23 +20,17 @@ defmodule Mist.Profile.UserRelays do
     |> unique_constraint([:relay_id, :pubkey])
   end
 
-  def parse_tag(%{data: relay_url} = tag) do
+  def parse_tag(%{data: relay_url, info: info}) do
     {:ok, relay} = Mist.Relay.get_or_create_relay(relay_url)
-    purpose = if Map.get(tag, :info) do
-      tag.info
-      |> Enum.at(0)
-      |> translate_rw()
-      else
-        :rw
-      end
+    purpose = translate_rw(info)
     {:ok, %{relay_id: relay.id, purpose: purpose}}
   end
 
   def parse_tag(_tag) do
-    {:error, "missing 'data' key in tag"}
+    {:error, "missing a required key in tag: data or info"}
   end
 
-  defp translate_rw("read"), do: :r
-  defp translate_rw("write"), do: :w
+  defp translate_rw(["read"]), do: :r
+  defp translate_rw(["write"]), do: :w
   defp translate_rw(_), do: :rw
 end

@@ -175,7 +175,7 @@ defmodule Mist.Profile do
         case UserRelays.parse_tag(tag) do
           {:ok, parsed} ->
             parsed
-            |> Map.put(:pubkey_id, profile.id)
+            |> Map.put(:pubkey, profile.pubkey)
             |> Map.put(:inserted_at, now)
             |> Map.put(:updated_at, now)
 
