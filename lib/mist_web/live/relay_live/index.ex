@@ -30,14 +30,13 @@ defmodule MistWeb.RelayLive.Index do
   @impl true
   def handle_info({:fetch_relay_info, {id, state}}, socket) do
     case Relay.Info.get(state.url) do
-      {:ok, json_info} ->
-        case JSON.decode(json_info) do
-          {:ok, info} ->
+      {:ok, info} ->
+        if is_map(info) do
             Relay.create_or_update_relay(state.url, info)
             updated_relays =
               Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: info} end)
               {:noreply, assign(socket, :relays, updated_relays)}
-          {:error, _} ->
+        else
             Logger.warning("Could not decode relay info data")
             {:noreply, socket}
         end

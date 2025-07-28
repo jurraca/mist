@@ -9,7 +9,7 @@ defmodule MistWeb.NoteLive.Index do
     {:ok, socket
      |> stream(:notes, [])
      |> assign(:graph_data, %{nodes: [], links: []})
-     |> assign(:view_mode, :list)} # :list or :graph
+     |> assign(:view_mode, :list)}
   end
 
   @impl true
@@ -53,8 +53,7 @@ defmodule MistWeb.NoteLive.Index do
 
   defp update_graph_data(socket, note) do
     current_graph = socket.assigns.graph_data
-    
-    # Create node for this note
+
     new_node = %{
       id: note.id,
       pubkey: note.pubkey,
@@ -62,22 +61,20 @@ defmodule MistWeb.NoteLive.Index do
       type: "note",
       created_at: note.created_at
     }
-    
-    # Look for reply relationships in tags (e tag references)
+
     reply_links = extract_reply_links(note)
-    
+
     updated_graph = %{
       nodes: [new_node | current_graph.nodes],
       links: reply_links ++ current_graph.links
     }
-    
+
     assign(socket, :graph_data, updated_graph)
   end
-  
+
   defp extract_reply_links(note) do
-    # Extract 'e' tags that reference other notes
     note.tags
-    |> Enum.filter(fn tag -> length(tag) >= 2 and hd(tag) == "e" end)
+    |> Enum.filter(fn tag -> tag.type == "e" end)
     |> Enum.map(fn [_type, referenced_note_id | _rest] ->
       %{
         source: referenced_note_id,
