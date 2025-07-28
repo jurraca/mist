@@ -29,7 +29,7 @@
   <div class="mt-8">
     <h2 class="text-lg font-semibold mb-4">Profiles you follow</h2>
     <div id="profiles" phx-update="stream" class="space-y-4">
-      <div :for={{id, profile} <- @streams.profiles} id={id} class="p-4 bg-white shadow rounded-lg">
+      <div :for={{id, profile} <- @streams.profiles} id={id} class="p-4 bg-dark-secondary border border-dark-border shadow-dark rounded-lg">
         <div class="flex items-center gap-4">
           <div :if={profile.picture} class="w-12 h-12">
             <img src={profile.picture} class="w-full h-full rounded-full object-cover" alt={profile.name}/>
