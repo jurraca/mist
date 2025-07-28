@@ -10,27 +10,27 @@
 
   <div class="mt-8">
     <div id="relays" class="space-y-4">
-      <div :for={{id, relay} <- @relays} id={id} class="p-4 bg-white shadow rounded-lg">
-        <div class="flex items-center justify-between">
-          <div class="flex-1">
+      <div :for={{id, relay} <- @relays} id={id} class="p-4 bg-dark-secondary border border-dark-border shadow-dark rounded-lg">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <h3 class="font-medium text-gray-900"><%= relay.url %></h3>
-              <span class="flex w-2 h-2 bg-green-500 rounded-full"></span>
+              <h3 class="font-medium text-text-primary truncate"><%= relay.url %></h3>
+              <span class="flex w-2 h-2 bg-neon-green rounded-full flex-shrink-0"></span>
             </div>
-            <div class="mt-2 text-sm text-gray-600">
+            <div class="mt-2 text-sm text-text-secondary">
               <ul class="space-y-1">
                 <%= if relay.relay_info do %>
               <%= for {k, v} <- relay.relay_info do %>
                 <%= if is_binary(v) and v != "" do %>
                   <li class="flex items-center gap-1">
-                    <span class="font-medium"><%= k %>:</span>
-                    <span><%= v %></span>
+                    <span class="font-medium text-text-primary"><%= k %>:</span>
+                    <span class="break-words"><%= v %></span>
                   </li>
                 <% end %>
                 <%= if is_list(v) do %>
                   <li class="flex items-center gap-1">
-                    <span class="font-medium"><%= k %>:</span>
-                    <span><%= Enum.join(v, ", ") %></span>
+                    <span class="font-medium text-text-primary"><%= k %>:</span>
+                    <span class="break-words"><%= Enum.join(v, ", ") %></span>
                   </li>
                 <% end %>
               <% end %>
@@ -38,11 +38,11 @@
               </ul>
             </div>
           </div>
-          <div>
+          <div class="flex-shrink-0">
             <.link
               phx-click={JS.push("delete", value: %{name: relay.url})}
               data-confirm="Are you sure you want to disconnect from this relay?"
-              class="text-sm text-red-600 hover:text-red-800"
+              class="text-sm text-red-500 hover:text-red-400 transition-colors whitespace-nowrap"
             >
               Disconnect
             </.link>
