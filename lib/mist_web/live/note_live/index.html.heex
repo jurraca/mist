@@ -58,20 +58,22 @@
                 <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
                   Author
                 </span>
-                <code class="pubkey text-xs bg-dark-tertiary px-2 py-1 rounded">
+                <code id={"pubkey-#{note.id}"} class="pubkey text-xs bg-dark-tertiary px-2 py-1 rounded">
                   <%= if note.author do %>
                     {note.author}
                   <% else %>
                     {String.slice(note.pubkey, 0, 12)}...
                   <% end %>
                 </code>
+                <span class="hidden" id={"pubkey-full-#{note.id}"}>{note.pubkey}</span>
                 <button
+                  id="copy-pubkey"
                   phx-hook="Copy"
-                  data-to={"#pubkey-#{note.id}"}
-                  class="text-xs text-text-muted hover:text-neon-green transition-colors cursor-pointer"
+                  data-to={"#pubkey-full-#{note.id}"}
+                  class="text-xs text-text-muted border-none p-2 hover:text-neon-green transition-colors cursor-pointer"
                   title="Copy pubkey"
                 >
-                  📋
+                  <.icon name="hero-document-duplicate-mini"/>
                 </button>
               </div>
               <div class="flex items-center gap-3">
@@ -103,12 +105,13 @@
             </code>
             <span class="hidden" id={"note-full-id-#{note.id}"}>{note.id}</span>
             <button
+              id="copy-note-id"
               phx-hook="Copy"
               data-to={"#note-full-id-#{note.id}"}
-              class="text-xs text-text-muted hover:text-neon-green transition-colors cursor-pointer"
+              class="text-xs text-text-muted border-none p-2 hover:text-neon-green transition-colors cursor-pointer"
               title="Copy event ID"
             >
-              📋
+              <.icon name="hero-document-duplicate-mini"/>
             </button>
           </div>
         </div>

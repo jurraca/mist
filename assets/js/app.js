@@ -55,14 +55,14 @@ Hooks.Copy = {
     let { to } = this.el.dataset;
     this.el.addEventListener("click", (ev) => {
       ev.preventDefault();
+      const originalContent = this.el.innerHTML
       let text = document.querySelector(to).textContent || document.querySelector(to).value;
       navigator.clipboard.writeText(text).then(() => {
-        const originalText = this.el.textContent
-        this.el.textContent = "Copied!"
+        this.el.innerHTML = "Copied!"
         this.el.classList.add("text-neon-green")
 
         setTimeout(() => {
-          this.el.textContent = originalText
+          this.el.innerHTML = originalContent
           this.el.classList.remove("text-neon-green")
         }, 1000)
       }).catch(() => {
