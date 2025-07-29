@@ -1,6 +1,7 @@
 defmodule MistWeb.ProfileLive.Manage do
   use MistWeb, :live_view
   alias Mist.{Profile, Nostr.Keys, Nostr.Signer}
+  alias Nostr.Event
 
   @impl true
   def mount(_params, _session, socket) do
@@ -101,15 +102,15 @@ defmodule MistWeb.ProfileLive.Manage do
         |> Map.new()
         |> Jason.encode!()
 
-      event_params = %{
+      event_params = NostrEx.create_event(%{
         content: content,
         kind: 0,
         tags: []
-      }
+      })
 
-      with {:ok, event} <- Signer.sign_event(event_params),
-           :ok <- NostrEx.send_event(event),
-           {:ok, profile} <- Profile.update_profile(socket.assigns.profile, params) do
+      with {:ok, profile} <- Profile.update_profile(socket.assigns.profile, params),
+           {:ok, event} <- Signer.sign_event(event_params),
+           :ok <- NostrEx.send_event(event) do
         {:noreply,
          socket
          |> assign(profile: profile)
