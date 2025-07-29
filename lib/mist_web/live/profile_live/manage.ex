@@ -52,14 +52,11 @@ defmodule MistWeb.ProfileLive.Manage do
   def handle_event("generate_keypair", _params, socket) do
     case Secp256k1.keypair(:xonly) do
       {priv_key, pub_key} ->
-        # Convert to hex strings
         priv_key_hex = Base.encode16(priv_key, case: :lower)
         pub_key_hex = Base.encode16(pub_key, case: :lower)
         
-        # Store the private key in application config (you may want to use a more secure method)
         Application.put_env(:mist, :private_key, priv_key_hex)
         
-        # Create or get profile with the new public key
         case Profile.get_or_create_profile(pub_key_hex) do
           {:ok, profile} ->
             {:noreply,

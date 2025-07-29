@@ -24,7 +24,9 @@
     <.input field={@form["picture"]} label="Picture URL" type="url"/>
     <.input field={@form["banner"]} label="Banner URL" type="url"/>
     <.input field={@form["website"]} label="Website" type="url"/>
-    <.input field={@form["bot"]} label="Is Bot?" type="checkbox"/>
+    <div class="w-20">
+      <.input field={@form["bot"]} label="Is Bot?" type="checkbox"/>
+    </div>
     
     <:actions>
       <.button type="submit" phx-disable-with="Saving...">Save Profile</.button>
