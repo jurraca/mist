@@ -5,8 +5,8 @@
     <:subtitle>Update your Nostr profile (kind 0 event)</:subtitle>
   </.header>
 
-  <div class="mt-4 p-4 bg-gray-50 rounded-lg">
-    <p class="font-mono text-sm break-all">Your pubkey: <%= @pubkey %></p>
+  <div class="mt-4 p-4 bg-dark-secondary border border-dark-border rounded-lg">
+    <p class="font-mono text-sm break-all text-text-primary">Your pubkey: <%= @pubkey %></p>
   </div>
 
   <.simple_form for={@form} phx-submit="save" class="mt-8">
