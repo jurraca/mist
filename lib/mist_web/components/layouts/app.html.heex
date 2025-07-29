@@ -11,32 +11,29 @@
         <.link navigate={~p"/notes"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
           Notes
         </.link>
-        <.link navigate={~p"/relays"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
-          Relays
-        </.link>
         <.link navigate={~p"/profiles"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
           Profiles
+        </.link>
+        <.link navigate={~p"/relays"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
+          Relays
         </.link>
       </nav>
     </div>
     <div class="flex items-center gap-4">
-      <div class="text-xs text-text-muted font-mono">
-        v{Application.spec(:phoenix, :vsn)}
-      </div>
-      <a href="https://github.com/nostr-protocol/nostr" 
+      <a href="https://github.com/nostr-protocol/nostr"
 class="text-text-secondary hover:text-neon-green transition-colors">
         Nostr Protocol
       </a>
       <!-- Dropdown Menu -->
       <div class="relative">
-        <button 
+        <button
           id="gear-menu-button"
           phx-click={JS.toggle(to: "#gear-dropdown") |> JS.add_class("hidden", to: "#gear-dropdown", transition: "")}
           class="p-2 text-text-secondary hover:text-neon-green transition-colors">
           <.icon name="hero-cog-6-tooth" class="w-5 h-5" />
         </button>
-        <div 
-          id="gear-dropdown" 
+        <div
+          id="gear-dropdown"
           class="hidden absolute right-0 mt-2 w-48 bg-dark-secondary border border-dark-border rounded-lg shadow-lg py-1 z-50"
           phx-click-away={JS.hide(to: "#gear-dropdown")}>
           <.link navigate={~p"/profile/manage"} class="block px-4 py-2 text-sm text-text-primary hover:bg-dark-tertiary transition-colors">
