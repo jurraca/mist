@@ -226,9 +226,7 @@ tr:hover {
 
 .note-content {
   color: var(--text-primary);
-  line-height: 1.7;
   margin: 1rem 0;
-  white-space: pre-wrap;
 }
 
 /* Status indicators */
