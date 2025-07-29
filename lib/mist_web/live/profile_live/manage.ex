@@ -15,6 +15,7 @@ defmodule MistWeb.ProfileLive.Manage do
          assign(socket,
            pubkey: pubkey,
            profile: profile,
+           has_local_keypair: true,
            form:
              to_form(%{
                "name" => profile.name || "",
@@ -27,46 +28,62 @@ defmodule MistWeb.ProfileLive.Manage do
              })
          )}
 
-      {:error, reason} ->
+      {:error, _reason} ->
         {:ok,
-         socket
-         |> put_flash(:error, "Private key error: #{reason}")
-         |> redirect(to: ~p"/")}
+         assign(socket,
+           pubkey: nil,
+           profile: nil,
+           has_local_keypair: false,
+           form:
+             to_form(%{
+               "name" => "",
+               "about" => "",
+               "picture" => "",
+               "display_name" => "",
+               "website" => "",
+               "banner" => "",
+               "bot" => false
+             })
+         )}
     end
   end
 
   @impl true
   def handle_event("save", params, socket) do
-    content =
-      %{
-        "name" => params["name"],
-        "about" => params["about"],
-        "picture" => params["picture"],
-        "display_name" => params["display_name"],
-        "website" => params["website"],
-        "banner" => params["banner"],
-        "nip05" => nil
+    if socket.assigns.has_local_keypair do
+      content =
+        %{
+          "name" => params["name"],
+          "about" => params["about"],
+          "picture" => params["picture"],
+          "display_name" => params["display_name"],
+          "website" => params["website"],
+          "banner" => params["banner"],
+          "nip05" => nil
+        }
+        |> Enum.reject(fn {_k, v} -> is_nil(v) || v == "" end)
+        |> Map.new()
+        |> Jason.encode!()
+
+      event_params = %{
+        content: content,
+        kind: 0,
+        tags: []
       }
-      |> Enum.reject(fn {_k, v} -> is_nil(v) || v == "" end)
-      |> Map.new()
-      |> Jason.encode!()
 
-    event_params = %{
-      content: content,
-      kind: 0,
-      tags: []
-    }
-
-    with {:ok, event} <- Signer.sign_event(event_params),
-         :ok <- NostrEx.send_event(event),
-         {:ok, profile} <- Profile.update_profile(socket.assigns.profile, params) do
-      {:noreply,
-       socket
-       |> assign(profile: profile)
-       |> put_flash(:info, "Profile updated")}
+      with {:ok, event} <- Signer.sign_event(event_params),
+           :ok <- NostrEx.send_event(event),
+           {:ok, profile} <- Profile.update_profile(socket.assigns.profile, params) do
+        {:noreply,
+         socket
+         |> assign(profile: profile)
+         |> put_flash(:info, "Profile updated")}
+      else
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Failed to update profile: #{inspect(reason)}")}
+      end
     else
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to update profile: #{inspect(reason)}")}
+      {:noreply, put_flash(socket, :error, "No private key found. Please configure your private key to create a profile.")}
     end
   end
 end
