@@ -72,11 +72,10 @@ defmodule Mist.Nostr.Signer do
 
   @impl GenServer
   def handle_call({:sign_event, event_params}, _from, %{mode: :local} = state) do
-    case Keys.get_private_key() do
-      {:ok, priv_key} ->
-        event = Nostr.Event.sign(event_params, priv_key)
+    with {:ok, priv_key} <- Keys.get_private_key(),
+      {:ok, event} <- NostrEx.sign_event(event_params, priv_key) do
         {:reply, {:ok, event}, state}
-
+    else
       {:error, _} = err ->
         {:reply, err, state}
     end
