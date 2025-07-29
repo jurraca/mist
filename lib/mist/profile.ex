@@ -40,12 +40,11 @@ defmodule Mist.Profile do
   def get_profile!(id), do: Repo.get!(Profile, id)
 
   @doc """
-  Get a single profile by its pubkey, with its follow list.
+  Get a single profile by its pubkey.
   """
   def get_by_pubkey(pubkey) do
     Profile
     |> Repo.get_by(pubkey: pubkey)
-    |> Repo.preload([:following])
   end
 
   @doc """
