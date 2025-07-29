@@ -65,6 +65,14 @@
                     {String.slice(note.pubkey, 0, 12)}...
                   <% end %>
                 </code>
+                <button
+                  phx-hook="Copy"
+                  data-to={"#pubkey-#{note.id}"}
+                  class="text-xs text-text-muted hover:text-neon-green transition-colors cursor-pointer"
+                  title="Copy pubkey"
+                >
+                  📋
+                </button>
               </div>
               <div class="flex items-center gap-3">
                 <%= if note.bot do %>
@@ -90,9 +98,18 @@
             <span class="text-xs font-small text-text-muted uppercase tracking-wider">
               event ID
             </span>
-            <code class="note-id text-xs bg-dark-tertiary px-2 py-1 rounded">
+            <code id={"note-id-#{note.id}"} class="note-id text-xs bg-dark-tertiary px-2 py-1 rounded">
               {String.slice(note.id, 0, 12)}...
             </code>
+            <span class="hidden" id={"note-full-id-#{note.id}"}>{note.id}</span>
+            <button
+              phx-hook="Copy"
+              data-to={"#note-full-id-#{note.id}"}
+              class="text-xs text-text-muted hover:text-neon-green transition-colors cursor-pointer"
+              title="Copy event ID"
+            >
+              📋
+            </button>
           </div>
         </div>
       </div>

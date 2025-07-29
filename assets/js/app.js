@@ -31,23 +31,45 @@ Hooks.NetworkGraph = {
     this.graph = new NetworkGraph(`#${this.el.id}`)
     this.updateGraph()
   },
-  
+
   updated() {
     this.updateGraph()
   },
-  
+
   updateGraph() {
     const graphData = JSON.parse(this.el.dataset.graph)
     if (graphData.nodes.length > 0) {
       this.graph.render(graphData)
     }
   },
-  
+
   destroyed() {
     if (this.graph) {
       this.graph.destroy()
     }
   }
+}
+
+Hooks.Copy = {
+  mounted() {
+    let { to } = this.el.dataset;
+    this.el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      let text = document.querySelector(to).textContent || document.querySelector(to).value;
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = this.el.textContent
+        this.el.textContent = "Copied!"
+        this.el.classList.add("text-neon-green")
+
+        setTimeout(() => {
+          this.el.textContent = originalText
+          this.el.classList.remove("text-neon-green")
+        }, 1000)
+      }).catch(() => {
+        console.log("Failed to copy to clipboard")
+      })
+    });
+  },
 }
 
 let liveSocket = new LiveSocket("/live", Socket, {
@@ -69,4 +91,3 @@ liveSocket.connect()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
-
