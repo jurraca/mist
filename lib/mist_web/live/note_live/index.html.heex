@@ -7,27 +7,32 @@
     <:actions>
       <div class="flex items-center gap-4">
         <div class="flex bg-dark-tertiary rounded-lg p-1">
-          <button 
-            phx-click="toggle_view" 
+          <button
+            phx-click="toggle_view"
             phx-value-mode="list"
-            class={["px-3 py-1 rounded text-sm transition-all", 
-                    @view_mode == :list && "bg-neon-green text-dark-primary" || "text-text-secondary hover:text-text-primary"]}
+            class={[
+              "px-3 py-1 rounded text-sm transition-all",
+              (@view_mode == :list && "bg-neon-green text-dark-primary") ||
+                "text-text-secondary hover:text-text-primary"
+            ]}
           >
             List
           </button>
-          <button 
-            phx-click="toggle_view" 
+          <button
+            phx-click="toggle_view"
             phx-value-mode="graph"
-            class={["px-3 py-1 rounded text-sm transition-all", 
-                    @view_mode == :graph && "bg-neon-green text-dark-primary" || "text-text-secondary hover:text-text-primary"]}
+            class={[
+              "px-3 py-1 rounded text-sm transition-all",
+              (@view_mode == :graph && "bg-neon-green text-dark-primary") ||
+                "text-text-secondary hover:text-text-primary"
+            ]}
           >
             Graph
           </button>
         </div>
         <.link patch={~p"/notes/new"}>
           <button class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:scale-105">
-            <.icon name="hero-plus-mini" class="w-4 h-4" />
-            New Note
+            <.icon name="hero-plus-mini" class="w-4 h-4" /> New Note
           </button>
         </.link>
       </div>
@@ -35,30 +40,51 @@
   </.header>
 
   <div class="space-y-4">
-    <div :if={@view_mode == :graph} 
-         id="graph-container" 
-         class="bg-dark-secondary border border-dark-border rounded-lg"
-         phx-hook="NetworkGraph"
-         data-graph={Jason.encode!(@graph_data)}>
+    <div
+      :if={@view_mode == :graph}
+      id="graph-container"
+      class="bg-dark-secondary border border-dark-border rounded-lg"
+      phx-hook="NetworkGraph"
+      data-graph={Jason.encode!(@graph_data)}
+    >
     </div>
-    
+
     <div :if={@view_mode == :list} id="notes" phx-update="stream" class="space-y-4">
       <div :for={{dom_id, note} <- @streams.notes} id={dom_id} class="note-card">
         <div class="space-y-3">
           <div class="flex items-start justify-between">
             <div class="flex-1 space-y-2">
               <div class="flex items-center gap-3">
-                <span class="text-xs font-medium text-text-muted uppercase tracking-wider">Author</span>
-                <code class="pubkey text-xs bg-dark-tertiary px-2 py-1 rounded"><%= String.slice(note.pubkey, 0, 16) %>...</code>
+                <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
+                  Author
+                </span>
+                <code class="pubkey text-xs bg-dark-tertiary px-2 py-1 rounded">
+                  <%= if note.author do %>
+                    {note.author}
+                  <% else %>
+                    {String.slice(note.pubkey, 0, 12)}...
+                  <% end %>
+                </code>
               </div>
               <div class="flex items-center gap-3">
-                <span class="text-xs font-medium text-text-muted uppercase tracking-wider">ID</span>
-                <code class="note-id text-xs bg-dark-tertiary px-2 py-1 rounded"><%= String.slice(note.id, 0, 16) %>...</code>
+                <%= if note.bot do %>
+                  <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
+                    bot account 🤖
+                  </span>
+                <% end %>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
+                  event ID
+                </span>
+                <code class="note-id text-xs bg-dark-tertiary px-2 py-1 rounded">
+                  {String.slice(note.id, 0, 12)}...
+                </code>
               </div>
             </div>
             <div class="text-xs text-text-muted font-mono">
               <%= if note.created_at do %>
-                <%= note.created_at %>
+                {note.created_at}
               <% else %>
                 Just now
               <% end %>
@@ -66,17 +92,15 @@
           </div>
 
           <div class="note-content bg-dark-tertiary rounded-lg p-4 border border-dark-border">
-            <p class="text-text-primary leading-relaxed whitespace-pre-wrap"><%= note.content %></p>
+            <p class="text-text-primary leading-relaxed whitespace-pre-wrap">{note.content}</p>
           </div>
 
           <div class="flex items-center gap-4 text-xs text-text-muted">
             <span class="flex items-center gap-1">
-              <.icon name="hero-signal-mini" class="w-3 h-3 text-neon-green" />
-              Live
+              <.icon name="hero-signal-mini" class="w-3 h-3 text-neon-green" /> Live
             </span>
             <span class="flex items-center gap-1">
-              <.icon name="hero-globe-alt-mini" class="w-3 h-3" />
-              Relay
+              <.icon name="hero-globe-alt-mini" class="w-3 h-3" /> Relay
             </span>
           </div>
         </div>

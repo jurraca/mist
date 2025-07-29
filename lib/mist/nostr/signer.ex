@@ -45,7 +45,7 @@ defmodule Mist.Nostr.Signer do
     case Keys.derive_public_key() do
       {:ok, pubkey} ->
         :persistent_term.put(:my_profile_pubkey, pubkey)
-        Profile.get_or_create_profile(pubkey) |> dbg()
+        Profile.get_or_create_profile(pubkey)
         {:noreply, state}
 
       _ ->

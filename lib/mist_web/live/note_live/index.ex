@@ -30,19 +30,11 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   @impl true
-  def handle_info(%Nostr.Event{} = note, socket) do
-    note_data = %{
-      id: note.id,
-      pubkey: note.pubkey,
-      content: note.content,
-      created_at: note.created_at,
-      tags: note.tags || []
-    }
-    
+  def handle_info(%{} = note_data, socket) do
     new_socket = socket
     |> stream_insert(:notes, note_data, at: 0)
     |> update_graph_data(note_data)
-    
+
     {:noreply, new_socket}
   end
 

@@ -34,8 +34,9 @@ defmodule Mist.Nostr.EventHandler do
 
   def process_event(%Event{kind: 1} = event) do
     topic = "notes"
+    event_map = fetch_author_data(event)
     # Write to a kind-1-only DB table
-    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
+    Phoenix.PubSub.broadcast(Mist.PubSub, topic, event_map)
   end
 
   def process_event(%Event{kind: 3, pubkey: pubkey, tags: tags} = event) do
@@ -50,5 +51,21 @@ defmodule Mist.Nostr.EventHandler do
     topic = "events:#{event.kind}"
     # write to a general events table
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
+  end
+
+  defp fetch_author_data(%{pubkey: pubkey} = event) do
+    profile = Profile.get_by_pubkey(pubkey)
+    event_map = Map.from_struct(event)
+    case profile do
+      nil -> event_map
+        |> Map.put(:author, nil)
+        |> Map.put(:bot, false)
+      %{name: nil, bot: bot} -> event_map
+        |> Map.put(:author, nil)
+        |> Map.put(:bot, bot)
+      %{name: name, bot: bot} -> event_map
+        |> Map.put(:author, name)
+        |> Map.put(:bot, bot)
+    end
   end
 end
