@@ -49,6 +49,47 @@ defmodule MistWeb.ProfileLive.Manage do
   end
 
   @impl true
+  def handle_event("generate_keypair", _params, socket) do
+    case Secp256k1.keypair(:xonly) do
+      {priv_key, pub_key} ->
+        # Convert to hex strings
+        priv_key_hex = Base.encode16(priv_key, case: :lower)
+        pub_key_hex = Base.encode16(pub_key, case: :lower)
+        
+        # Store the private key in application config (you may want to use a more secure method)
+        Application.put_env(:mist, :private_key, priv_key_hex)
+        
+        # Create or get profile with the new public key
+        case Profile.get_or_create_profile(pub_key_hex) do
+          {:ok, profile} ->
+            {:noreply,
+             socket
+             |> assign(
+               pubkey: pub_key_hex,
+               profile: profile,
+               has_local_keypair: true,
+               form: to_form(%{
+                 "name" => profile.name || "",
+                 "about" => profile.about || "",
+                 "picture" => profile.picture || "",
+                 "display_name" => profile.display_name || "",
+                 "website" => profile.website || "",
+                 "banner" => profile.banner || "",
+                 "bot" => profile.bot || false
+               })
+             )
+             |> put_flash(:info, "Keypair generated successfully! Your public key: #{pub_key_hex}")}
+          
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to create profile: #{inspect(reason)}")}
+        end
+      
+      error ->
+        {:noreply, put_flash(socket, :error, "Failed to generate keypair: #{inspect(error)}")}
+    end
+  end
+
+  @impl true
   def handle_event("save", params, socket) do
     if socket.assigns.has_local_keypair do
       content =
