@@ -4,8 +4,14 @@
   </.header>
 
   <.form for={@search_form} phx-submit="search" class="mt-4">
-    <.input type="text" field={@search_form[:search_term]} placeholder="Enter nprofile, npub, or hex pubkey..." />
-    <.button type="submit" class="mt-2">Search</.button>
+    <div class="flex gap-2 items-end">
+      <div class="flex-1">
+        <.input type="text" field={@search_form[:search_term]} placeholder="Enter nprofile, npub, or hex pubkey..." />
+      </div>
+      <div class="flex-shrink-0">
+        <.button type="submit">Search</.button>
+      </div>
+    </div>
   </.form>
 
   <div :if={@parsed_profile} class="mt-4 p-4 bg-dark-secondary border border-dark-border rounded-lg">
