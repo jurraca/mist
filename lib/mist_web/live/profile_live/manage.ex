@@ -1,8 +1,6 @@
-
 defmodule MistWeb.ProfileLive.Manage do
   use MistWeb, :live_view
   alias Mist.{Profile, Nostr.Keys, Nostr.Signer}
-  alias Nostr.Event
 
   @impl true
   def mount(_params, _session, socket) do
@@ -54,9 +52,9 @@ defmodule MistWeb.ProfileLive.Manage do
       {priv_key, pub_key} ->
         priv_key_hex = Base.encode16(priv_key, case: :lower)
         pub_key_hex = Base.encode16(pub_key, case: :lower)
-        
+
         Application.put_env(:mist, :private_key, priv_key_hex)
-        
+
         case Profile.get_or_create_profile(pub_key_hex) do
           {:ok, profile} ->
             {:noreply,
@@ -76,11 +74,11 @@ defmodule MistWeb.ProfileLive.Manage do
                })
              )
              |> put_flash(:info, "Keypair generated successfully! Your public key: #{pub_key_hex}")}
-          
+
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, "Failed to create profile: #{inspect(reason)}")}
         end
-      
+
       error ->
         {:noreply, put_flash(socket, :error, "Failed to generate keypair: #{inspect(error)}")}
     end

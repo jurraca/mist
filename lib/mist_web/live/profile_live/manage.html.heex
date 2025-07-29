@@ -1,17 +1,28 @@
 <div class="max-w-2xl mx-auto mt-8">
   <.header>
-    Manage Profile
+    My Profile
   </.header>
 
-  <div :if={@has_local_keypair} class="mt-4 p-4 bg-dark-secondary border border-dark-border rounded-lg">
-    <p class="font-mono text-sm break-all text-text-primary">Your pubkey: <%= @pubkey %></p>
+  <div
+    :if={@has_local_keypair}
+    class="mt-4 p-4 bg-dark-secondary border border-dark-border rounded-lg"
+  >
+    <p class="font-mono text-sm break-all text-text-primary">
+      My pubkey:
+      <code class="text-xs bg-dark-tertiary px-2 py-1 rounded text-text-secondary">
+        {@pubkey}
+      </code>
+    </p>
   </div>
 
-  <div :if={!@has_local_keypair} class="mt-4 p-4 bg-dark-secondary border border-yellow-300 rounded-lg">
+  <div
+    :if={!@has_local_keypair}
+    class="mt-4 p-4 bg-dark-secondary border border-yellow-300 rounded-lg"
+  >
     <p class="text-black-800 font-medium">No local keypair found.</p>
     <p class="text-sm text-black-800 mt-1">Would you like me to generate one for you?</p>
-    <button 
-      phx-click="generate_keypair" 
+    <button
+      phx-click="generate_keypair"
       class="mt-3 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
     >
       Generate Keypair
@@ -19,15 +30,15 @@
   </div>
 
   <.simple_form for={@form} phx-submit="save" class="mt-8">
-    <.input field={@form["name"]} label="Name" type="text"/>
-    <.input field={@form["about"]} label="About" type="textarea"/>
-    <.input field={@form["picture"]} label="Picture URL" type="url"/>
-    <.input field={@form["banner"]} label="Banner URL" type="url"/>
-    <.input field={@form["website"]} label="Website" type="url"/>
+    <.input field={@form["name"]} label="Name" type="text" />
+    <.input field={@form["about"]} label="About" type="textarea" />
+    <.input field={@form["picture"]} label="Picture URL" type="url" />
+    <.input field={@form["banner"]} label="Banner URL" type="url" />
+    <.input field={@form["website"]} label="Website" type="url" />
     <div class="w-20">
-      <.input field={@form["bot"]} label="Is Bot?" type="checkbox"/>
+      <.input field={@form["bot"]} label="Is Bot?" type="checkbox" />
     </div>
-    
+
     <:actions>
       <.button type="submit" phx-disable-with="Saving...">Save Profile</.button>
     </:actions>
