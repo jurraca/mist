@@ -190,7 +190,7 @@ defmodule Mist.Profile do
   def get_my_profile do
     case :persistent_term.get(:my_profile_pubkey, nil) do
       nil -> {:error, :no_profile_set}
-      pubkey -> {:ok, get_by_pubkey(pubkey)}
+      pubkey -> {:ok, Profile |> Repo.get_by(pubkey: pubkey) |> Repo.preload([:following])}
     end
   end
 
