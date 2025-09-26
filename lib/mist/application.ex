@@ -7,6 +7,9 @@ defmodule Mist.Application do
 
   @impl true
   def start(_type, _args) do
+    # Create ETS table for interaction counts with concurrency options
+    :ets.new(:interaction_counts, [:named_table, :public, :set, {:write_concurrency, true}, {:read_concurrency, true}])
+    
     children = [
       MistWeb.Telemetry,
       Mist.Repo,

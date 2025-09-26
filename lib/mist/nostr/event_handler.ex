@@ -46,6 +46,40 @@ defmodule Mist.Nostr.EventHandler do
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
   end
 
+  # Reactions (kind 7)
+  def process_event(%Event{kind: 7, tags: tags} = event) do
+    case extract_referenced_note_id(tags) do
+      {:ok, note_id} ->
+        increment_reaction_count(note_id)
+        Logger.debug("Reaction added to note #{note_id}")
+      :error ->
+        Logger.debug("Could not find referenced note in reaction event")
+    end
+  end
+
+  # Boosts/Reposts (kind 6)  
+  def process_event(%Event{kind: 6, tags: tags} = event) do
+    case extract_referenced_note_id(tags) do
+      {:ok, note_id} ->
+        increment_boost_count(note_id)
+        Logger.debug("Boost added to note #{note_id}")
+      :error ->
+        Logger.debug("Could not find referenced note in boost event")
+    end
+  end
+
+  # Zaps (kind 9735)
+  def process_event(%Event{kind: 9735, tags: tags} = event) do
+    case extract_referenced_note_id(tags) do
+      {:ok, note_id} ->
+        zap_amount = extract_zap_amount(event)
+        increment_zap_count(note_id, zap_amount)
+        Logger.debug("Zap added to note #{note_id} (amount: #{zap_amount})")
+      :error ->
+        Logger.debug("Could not find referenced note in zap event")
+    end
+  end
+
   def process_event(event) do
     dbg(event)
     topic = "events:#{event.kind}"
@@ -56,16 +90,105 @@ defmodule Mist.Nostr.EventHandler do
   defp fetch_author_data(%{pubkey: pubkey} = event) do
     profile = Profile.get_by_pubkey(pubkey)
     event_map = Map.from_struct(event)
+    
+    # Add interaction counts to the event data
+    counts = get_interaction_counts(event.id)
+    
     case profile do
       nil -> event_map
         |> Map.put(:author, nil)
         |> Map.put(:bot, false)
+        |> Map.merge(counts)
       %{name: nil, bot: bot} -> event_map
         |> Map.put(:author, nil)
         |> Map.put(:bot, bot)
+        |> Map.merge(counts)
       %{name: name, bot: bot} -> event_map
         |> Map.put(:author, name)
         |> Map.put(:bot, bot)
+        |> Map.merge(counts)
     end
+  end
+
+  # Helper functions for tracking interaction counts
+
+  defp extract_referenced_note_id(tags) do
+    case Enum.find(tags, fn tag -> tag.type == "e" end) do
+      %{data: note_id} -> {:ok, note_id}
+      _ -> :error
+    end
+  end
+
+  defp extract_zap_amount(event) do
+    # Try to extract amount from bolt11 invoice in tags or content
+    # For now, return a default amount - this would need proper bolt11 parsing
+    1000
+  end
+
+  defp increment_reaction_count(note_id) do
+    key = {:reactions, note_id}
+    try do
+      :ets.update_counter(:interaction_counts, key, 1)
+    catch
+      :error, :badarg ->
+        # Key doesn't exist, insert default and retry
+        :ets.insert(:interaction_counts, {key, 0})
+        :ets.update_counter(:interaction_counts, key, 1)
+    end
+    broadcast_count_update(note_id)
+  end
+
+  defp increment_boost_count(note_id) do
+    key = {:boosts, note_id}
+    try do
+      :ets.update_counter(:interaction_counts, key, 1)
+    catch
+      :error, :badarg ->
+        # Key doesn't exist, insert default and retry
+        :ets.insert(:interaction_counts, {key, 0})
+        :ets.update_counter(:interaction_counts, key, 1)
+    end
+    broadcast_count_update(note_id)
+  end
+
+  defp increment_zap_count(note_id, amount) do
+    key = {:zaps, note_id}
+    try do
+      :ets.update_counter(:interaction_counts, key, amount)
+    catch
+      :error, :badarg ->
+        # Key doesn't exist, insert default and retry
+        :ets.insert(:interaction_counts, {key, 0})
+        :ets.update_counter(:interaction_counts, key, amount)
+    end
+    broadcast_count_update(note_id)
+  end
+
+  defp get_interaction_counts(note_id) do
+    reaction_count = case :ets.lookup(:interaction_counts, {:reactions, note_id}) do
+      [{_key, count}] -> count
+      [] -> 0
+    end
+    
+    boost_count = case :ets.lookup(:interaction_counts, {:boosts, note_id}) do
+      [{_key, count}] -> count
+      [] -> 0
+    end
+    
+    zap_amount = case :ets.lookup(:interaction_counts, {:zaps, note_id}) do
+      [{_key, amount}] -> amount
+      [] -> 0
+    end
+    
+    %{
+      reaction_count: reaction_count,
+      boost_count: boost_count,
+      zap_amount: zap_amount
+    }
+  end
+
+  defp broadcast_count_update(note_id) do
+    counts = get_interaction_counts(note_id)
+    Phoenix.PubSub.broadcast(Mist.PubSub, "note_counts", %{note_id: note_id, counts: counts})
   end
 end

@@ -30,6 +30,11 @@ class NetworkGraph {
 
     // Handle both transfer data (legacy) and note data
     const { nodes, links } = data.nodes ? this.processNotes(data) : this.processTransfers(data);
+    
+    // Track existing nodes to identify new ones for shimmer effect
+    const existingNodeIds = new Set(this.lastNodes ? this.lastNodes.map(n => n.id) : []);
+    const newNodes = nodes.filter(n => !existingNodeIds.has(n.id));
+    this.lastNodes = nodes;
 
     // Clear previous content
     this.svg.select("g").selectAll("*").remove();
@@ -65,45 +70,75 @@ class NetworkGraph {
       .attr("stroke-opacity", 0.6)
       .attr("stroke-width", d => Math.sqrt(d.value));
 
-    // Create nodes
-    const node = g.append("g")
-      .selectAll("circle")
+    // Create nodes with zap borders  
+    const nodeGroup = g.append("g")
+      .selectAll("g")
       .data(nodes)
-      .enter().append("circle")
+      .enter().append("g")
+      .call(this.drag());
+
+    // Zap border (outer ring) for nodes with zaps
+    nodeGroup
+      .filter(d => d.zap_amount > 0)
+      .append("circle")
+      .attr("r", d => Math.max(8, Math.min(24, 8 + Math.sqrt(d.count) * 2)))
+      .attr("fill", "none")
+      .attr("stroke", "#DAA520") // Burnished gold
+      .attr("stroke-width", 3)
+      .attr("opacity", 0.8);
+
+    // Main node circle
+    const node = nodeGroup
+      .append("circle")
       .attr("r", d => Math.max(6, Math.min(20, 6 + Math.sqrt(d.count) * 2)))
       .attr("fill", d => this.getNodeColor(d))
       .attr("stroke", "#fff")
-      .attr("stroke-width", 2)
-      .call(this.drag());
+      .attr("stroke-width", 2);
 
-    // Add labels
+    // Apply shimmer effect to new nodes
+    nodeGroup
+      .filter(d => newNodes.some(newNode => newNode.id === d.id))
+      .classed("graph-node-shimmer", true)
+      .transition()
+      .delay(800) // Remove class after animation
+      .duration(0)
+      .on("end", function() {
+        d3.select(this).classed("graph-node-shimmer", false);
+      });
+
+    // Add labels for notes
     const labels = g.append("g")
       .selectAll("text")
-      .data(nodes)
+      .data(nodes.filter(d => d.type === 'note'))
       .enter().append("text")
-      .text(d => `AS${d.id}`)
-      .attr("font-size", "12px")
+      .text(d => d.content ? d.content.slice(0, 20) + '...' : d.id.slice(0, 8))
+      .attr("font-size", "10px")
       .attr("dx", 15)
-      .attr("dy", 4);
+      .attr("dy", 4)
+      .attr("fill", "#ccc");
 
-    // Add tooltips
-    node.append("title")
+    // Add tooltips for notes
+    nodeGroup.append("title")
       .text(d => {
-        let typeDescription;
-        switch(d.type) {
-          case 'outgoing_only':
-            typeDescription = 'Outgoing only';
-            break;
-          case 'incoming_only':
-            typeDescription = 'Incoming only';
-            break;
-          case 'both':
-            typeDescription = `Both directions (${Math.round(d.ratio * 100)}% outgoing)`;
-            break;
-          default:
-            typeDescription = 'Unknown';
+        if (d.type === 'note') {
+          return `${d.content || 'Note'}\nReactions: ${d.reaction_count}\nBoosts: ${d.boost_count}\nZaps: ${d.zap_amount} sats\nInteraction Score: ${d.count}`;
+        } else {
+          let typeDescription;
+          switch(d.type) {
+            case 'outgoing_only':
+              typeDescription = 'Outgoing only';
+              break;
+            case 'incoming_only':
+              typeDescription = 'Incoming only';
+              break;
+            case 'both':
+              typeDescription = `Both directions (${Math.round(d.ratio * 100)}% outgoing)`;
+              break;
+            default:
+              typeDescription = 'Unknown';
+          }
+          return `AS${d.id}\nType: ${typeDescription}\nOutgoing: ${d.outgoing}\nIncoming: ${d.incoming}\nTotal: ${d.count}`;
         }
-        return `AS${d.id}\nType: ${typeDescription}\nOutgoing: ${d.outgoing}\nIncoming: ${d.incoming}\nTotal: ${d.count}`;
       });
 
     link.append("title")
@@ -117,9 +152,8 @@ class NetworkGraph {
         .attr("x2", d => d.target.x)
         .attr("y2", d => d.target.y);
 
-      node
-        .attr("cx", d => d.x)
-        .attr("cy", d => d.y);
+      nodeGroup
+        .attr("transform", d => `translate(${d.x},${d.y})`);
 
       labels
         .attr("x", d => d.x)
@@ -134,7 +168,11 @@ class NetworkGraph {
       content: node.content,
       pubkey: node.pubkey,
       created_at: node.created_at,
-      count: 1 // For sizing
+      reaction_count: node.reaction_count || 0,
+      boost_count: node.boost_count || 0,
+      zap_amount: node.zap_amount || 0,
+      // Calculate total interaction score for sizing
+      count: (node.reaction_count || 0) + (node.boost_count || 0) + Math.floor((node.zap_amount || 0) / 1000)
     }));
 
     const links = data.links.map(link => ({
@@ -220,6 +258,17 @@ class NetworkGraph {
 
   getNodeColor(node) {
     switch(node.type) {
+      case 'note':
+        // Color based on interaction intensity
+        if (node.count > 10) {
+          return '#ff6b6b'; // Red for high interaction
+        } else if (node.count > 5) {
+          return '#ffb347'; // Orange for medium interaction
+        } else if (node.count > 0) {
+          return '#4ecdc4'; // Teal for some interaction
+        } else {
+          return '#95a5a6'; // Gray for no interaction
+        }
       case 'outgoing_only':
         return '#ff6b6b'; // Red for outgoing only
       case 'incoming_only':

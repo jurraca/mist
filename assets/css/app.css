@@ -3,6 +3,28 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
+/* Shimmer effect for new graph nodes */
+@keyframes shimmer {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+    filter: brightness(1.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.graph-node-shimmer {
+  animation: shimmer 0.8s ease-out;
+}
+
 /* Custom CSS Variables for Dark Theme */
 :root {
   --bg-primary: #0a0a0a;

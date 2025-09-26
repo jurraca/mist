@@ -5,7 +5,52 @@
       Real-time Nostr notes from connected relays
     </:subtitle>
     <:actions>
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-4 flex-wrap">
+        <!-- Subscription Filter Dropdown -->
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-medium text-text-muted uppercase tracking-wider">
+            Source
+          </label>
+          <select 
+            phx-change="change_subscription_filter" 
+            name="filter"
+            class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+          >
+            <option value="all" selected={@subscription_filter == :all}>All Relays</option>
+            <option value="single_relay" selected={@subscription_filter == :single_relay}>Single Relay</option>
+            <option value="follows" selected={@subscription_filter == :follows}>Following</option>
+            <option value="hashtag" selected={@subscription_filter == :hashtag}>Hashtag</option>
+          </select>
+        </div>
+
+        <!-- Relay Selector (shown when single_relay is selected) -->
+        <div :if={@subscription_filter == :single_relay} class="flex items-center gap-2">
+          <select 
+            phx-change="change_relay" 
+            name="relay_url"
+            class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+          >
+            <option value="">Select Relay</option>
+            <option :for={relay <- @available_relays} value={relay.url} selected={@selected_relay == relay.url}>
+              {relay.name || relay.url}
+            </option>
+          </select>
+        </div>
+
+        <!-- Hashtag Input (shown when hashtag is selected) -->
+        <div :if={@subscription_filter == :hashtag} class="flex items-center gap-2">
+          <input 
+            phx-change="change_hashtag"
+            phx-debounce="500"
+            name="hashtag"
+            type="text"
+            placeholder="#bitcoin"
+            value={@hashtag_filter}
+            class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green w-32"
+          />
+        </div>
+
+        <!-- View Mode Toggle -->
         <div class="flex bg-dark-tertiary rounded-lg p-1">
           <button
             phx-click="toggle_view"
@@ -30,6 +75,7 @@
             Graph
           </button>
         </div>
+
         <.link patch={~p"/notes/new"}>
           <button class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:scale-105">
             <.icon name="hero-plus-mini" class="w-4 h-4" /> New Note
@@ -96,6 +142,29 @@
           <div class="note-content bg-dark-tertiary rounded-lg p-2 border border-dark-border">
             <p class="text-text-primary leading-2 p-2">{note.content}</p>
           </div>
+          
+          <!-- Interaction Stats -->
+          <div class="flex items-center gap-4 text-xs text-text-muted">
+            <%= if Map.get(note, :reaction_count, 0) > 0 do %>
+              <div class="flex items-center gap-1">
+                <span>❤️</span>
+                <span>{Map.get(note, :reaction_count, 0)}</span>
+              </div>
+            <% end %>
+            <%= if Map.get(note, :boost_count, 0) > 0 do %>
+              <div class="flex items-center gap-1">
+                <span>🔄</span>
+                <span>{Map.get(note, :boost_count, 0)}</span>
+              </div>
+            <% end %>
+            <%= if Map.get(note, :zap_amount, 0) > 0 do %>
+              <div class="flex items-center gap-1">
+                <span class="text-yellow-400">⚡</span>
+                <span class="text-yellow-400">{Map.get(note, :zap_amount, 0)} sats</span>
+              </div>
+            <% end %>
+          </div>
+          
           <div class="flex items-center gap-3">
             <span class="text-xs font-small text-text-muted uppercase tracking-wider">
               event ID
