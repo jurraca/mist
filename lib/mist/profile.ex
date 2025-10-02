@@ -316,6 +316,42 @@ defmodule Mist.Profile do
   # Privacy Management Functions
 
   @doc """
+  Publish a kind 3 follow list event with only public follows.
+  """
+  def publish_public_follow_list(profile_pubkey) do
+    alias Mist.Nostr.Signer
+
+    case get_by_pubkey(profile_pubkey) do
+      nil ->
+        {:error, :profile_not_found}
+
+      profile ->
+        public_follows = get_public_follows(profile.id)
+
+        tags =
+          Enum.map(public_follows, fn followed ->
+            relay = followed.relay || ""
+            petname = followed.petname || followed.name || ""
+            ["p", followed.pubkey, relay, petname]
+          end)
+
+        event_params =
+          NostrEx.create_event(%{
+            content: "",
+            kind: 3,
+            tags: tags
+          })
+
+        with {:ok, event} <- Signer.sign_event(event_params),
+             :ok <- NostrEx.send_event(event) do
+          {:ok, event}
+        else
+          error -> error
+        end
+    end
+  end
+
+  @doc """
   Toggle the visibility of a follow relationship.
   """
   def toggle_follow_visibility(follow_id, is_public) do

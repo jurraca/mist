@@ -59,6 +59,13 @@ defmodule Mist.Nostr.Dispatcher do
     subscribe(filters, opts)
   end
 
+  def subscribe_list_notes(list_id, opts \\ []) do
+    alias Mist.Profile
+    pubkeys = Profile.get_pubkeys_in_list(list_id)
+    filters = [%{kinds: [1, 6, 7, 9735], authors: pubkeys}]
+    subscribe(filters, opts)
+  end
+
   @impl GenServer
   def handle_cast({:subscribe, filters, opts}, state) do
     # Cancel existing subscriptions first
