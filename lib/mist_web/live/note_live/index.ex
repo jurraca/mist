@@ -30,7 +30,9 @@ defmodule MistWeb.NoteLive.Index do
      |> assign(:selected_relay, nil)
      |> assign(:hashtag_filter, "")
      |> assign(:follow_lists, follow_lists)
-     |> assign(:selected_list, nil)}
+     |> assign(:selected_list, nil)
+     |> assign(:pending_graph_updates, [])
+     |> assign(:batch_timer_ref, nil)}
   end
 
   @impl true
@@ -64,9 +66,24 @@ defmodule MistWeb.NoteLive.Index do
   def handle_info(%{} = note_data, socket) do
     new_socket = socket
     |> stream_insert(:notes, note_data, at: 0)
-    |> update_graph_data(note_data)
+    |> queue_graph_update(note_data)
 
     {:noreply, new_socket}
+  end
+
+  @impl true
+  def handle_info(:process_graph_batch, socket) do
+    socket = process_batched_graph_updates(socket)
+    {:noreply, assign(socket, :batch_timer_ref, nil)}
+  end
+
+  @impl true
+  def terminate(_reason, socket) do
+    # Cancel any pending batch timer on LiveView termination
+    if socket.assigns.batch_timer_ref do
+      Process.cancel_timer(socket.assigns.batch_timer_ref)
+    end
+    :ok
   end
 
   @impl true
@@ -113,10 +130,17 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   defp update_subscription(socket, filter_type, param \\ nil) do
-    # Clear existing UI state first
+    # Cancel any pending batch timer
+    if socket.assigns.batch_timer_ref do
+      Process.cancel_timer(socket.assigns.batch_timer_ref)
+    end
+    
+    # Clear existing UI state and pending updates
     cleared_socket = socket
     |> stream(:notes, [], reset: true)
     |> assign(:graph_data, %{nodes: [], links: []})
+    |> assign(:pending_graph_updates, [])
+    |> assign(:batch_timer_ref, nil)
     
     case filter_type do
       :all ->
@@ -156,28 +180,80 @@ defmodule MistWeb.NoteLive.Index do
     stream_insert(socket, :notes, updated_note, dom_id: "notes-#{note_id}")
   end
 
-  defp update_graph_data(socket, note) do
-    current_graph = socket.assigns.graph_data
+  defp queue_graph_update(socket, note) do
+    # Add note to pending updates
+    pending = [note | socket.assigns.pending_graph_updates]
+    socket = assign(socket, :pending_graph_updates, pending)
+    
+    # Schedule batch processing if not already scheduled
+    if socket.assigns.batch_timer_ref == nil do
+      timer_ref = Process.send_after(self(), :process_graph_batch, 250)
+      assign(socket, :batch_timer_ref, timer_ref)
+    else
+      socket
+    end
+  end
 
-    new_node = %{
-      id: note.id,
-      pubkey: note.pubkey,
-      content: String.slice(note.content, 0, 50) <> "...",
-      type: "note",
-      created_at: note.created_at,
-      reaction_count: Map.get(note, :reaction_count, 0),
-      boost_count: Map.get(note, :boost_count, 0),
-      zap_amount: Map.get(note, :zap_amount, 0)
-    }
+  defp process_batched_graph_updates(socket) do
+    pending = socket.assigns.pending_graph_updates
+    
+    if pending == [] do
+      socket
+    else
+      current_graph = socket.assigns.graph_data
+      existing_node_ids = MapSet.new(current_graph.nodes, & &1.id)
+      
+      # Deduplicate against existing graph nodes and within pending batch
+      unique_notes = 
+        pending
+        |> Enum.reverse()
+        |> Enum.uniq_by(& &1.id)
+        |> Enum.reject(fn note -> MapSet.member?(existing_node_ids, note.id) end)
+      
+      # Build incremental changes (only truly new nodes/links)
+      {new_nodes, new_links} = build_incremental_changes(unique_notes)
+      
+      # Deduplicate links against existing links
+      existing_link_keys = MapSet.new(current_graph.links, fn link ->
+        {link.source, link.target}
+      end)
+      
+      unique_new_links = Enum.reject(new_links, fn link ->
+        MapSet.member?(existing_link_keys, {link.source, link.target})
+      end)
+      
+      # Update graph data
+      updated_graph = %{
+        nodes: new_nodes ++ current_graph.nodes,
+        links: unique_new_links ++ current_graph.links
+      }
+      
+      # Push incremental update to JS hook
+      socket
+      |> assign(:graph_data, updated_graph)
+      |> push_event("graph_update", %{nodes: new_nodes, links: unique_new_links})
+      |> assign(:pending_graph_updates, [])
+    end
+  end
 
-    reply_links = extract_reply_links(note)
-
-    updated_graph = %{
-      nodes: [new_node | current_graph.nodes],
-      links: reply_links ++ current_graph.links
-    }
-
-    assign(socket, :graph_data, updated_graph)
+  defp build_incremental_changes(notes) do
+    nodes = Enum.map(notes, fn note ->
+      %{
+        id: note.id,
+        pubkey: note.pubkey,
+        content: String.slice(note.content, 0, 50) <> "...",
+        type: "note",
+        created_at: note.created_at,
+        reaction_count: Map.get(note, :reaction_count, 0),
+        boost_count: Map.get(note, :boost_count, 0),
+        zap_amount: Map.get(note, :zap_amount, 0)
+      }
+    end)
+    
+    links = notes
+    |> Enum.flat_map(&extract_reply_links/1)
+    
+    {nodes, links}
   end
 
   defp update_node_counts(socket, note_id, counts) do
@@ -194,7 +270,11 @@ defmodule MistWeb.NoteLive.Index do
       end)
     
     updated_graph = %{current_graph | nodes: updated_nodes}
-    assign(socket, :graph_data, updated_graph)
+    
+    # Push count update to JS hook
+    socket
+    |> assign(:graph_data, updated_graph)
+    |> push_event("graph_count_update", %{note_id: note_id, counts: counts})
   end
 
   defp extract_reply_links(note) do

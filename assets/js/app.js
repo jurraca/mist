@@ -29,17 +29,42 @@ let Hooks = {}
 Hooks.NetworkGraph = {
   mounted() {
     this.graph = new NetworkGraph(`#${this.el.id}`)
+    this.lastNodeCount = 0
     this.updateGraph()
+    
+    // Listen for incremental node/link updates from the server
+    this.handleEvent("graph_update", ({nodes, links}) => {
+      this.graph.updateIncremental({nodes, links})
+    })
+    
+    // Listen for count updates to existing nodes
+    this.handleEvent("graph_count_update", ({note_id, counts}) => {
+      this.graph.updateNodeCounts(note_id, counts)
+    })
   },
 
   updated() {
-    this.updateGraph()
+    // Only do full render if the graph was reset (nodes count decreased or went to zero)
+    // This indicates a filter change, not just new data
+    const graphData = JSON.parse(this.el.dataset.graph)
+    const currentNodeCount = graphData.nodes.length
+    
+    if (currentNodeCount < this.lastNodeCount || currentNodeCount === 0) {
+      // Filter changed - do full render
+      this.updateGraph()
+    }
+    // Otherwise rely on incremental push_events
   },
 
   updateGraph() {
     const graphData = JSON.parse(this.el.dataset.graph)
+    this.lastNodeCount = graphData.nodes.length
+    
     if (graphData.nodes.length > 0) {
       this.graph.render(graphData)
+    } else if (graphData.nodes.length === 0) {
+      // Clear the graph when no nodes
+      this.graph.render({nodes: [], links: []})
     }
   },
 
