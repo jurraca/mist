@@ -11,6 +11,13 @@ defmodule MistWeb.NoteLive.Index do
     Phoenix.PubSub.subscribe(Mist.PubSub, "note_counts")
     relays = Relay.list_relays()
     
+    # Load user's follow lists if available
+    follow_lists =
+      case Profile.get_my_profile() do
+        {:ok, profile} -> Profile.get_follow_lists(profile.id)
+        _ -> []
+      end
+    
     # Start with default subscription to all notes
     Dispatcher.subscribe_all_notes()
     
@@ -21,7 +28,9 @@ defmodule MistWeb.NoteLive.Index do
      |> assign(:subscription_filter, :all)
      |> assign(:available_relays, relays)
      |> assign(:selected_relay, nil)
-     |> assign(:hashtag_filter, "")}
+     |> assign(:hashtag_filter, "")
+     |> assign(:follow_lists, follow_lists)
+     |> assign(:selected_list, nil)}
   end
 
   @impl true
@@ -67,11 +76,24 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def handle_event("change_subscription_filter", %{"filter" => filter}, socket) do
-    filter_atom = String.to_atom(filter)
-    {:noreply, 
-      socket
-      |> assign(:subscription_filter, filter_atom)
-      |> update_subscription(filter_atom)}
+    cond do
+      String.starts_with?(filter, "list:") ->
+        [_, list_id] = String.split(filter, ":")
+        list_id = String.to_integer(list_id)
+        {:noreply,
+         socket
+         |> assign(:subscription_filter, {:list, list_id})
+         |> assign(:selected_list, list_id)
+         |> update_subscription({:list, list_id})}
+
+      true ->
+        filter_atom = String.to_atom(filter)
+        {:noreply,
+         socket
+         |> assign(:subscription_filter, filter_atom)
+         |> assign(:selected_list, nil)
+         |> update_subscription(filter_atom)}
+    end
   end
 
   @impl true 
@@ -112,6 +134,9 @@ defmodule MistWeb.NoteLive.Index do
             # If no follows, fall back to all notes
             Dispatcher.subscribe_all_notes()
         end
+
+      {:list, list_id} ->
+        Dispatcher.subscribe_list_notes(list_id)
         
       :hashtag when is_binary(param) and param != "" ->
         Dispatcher.subscribe_hashtag_notes(param)

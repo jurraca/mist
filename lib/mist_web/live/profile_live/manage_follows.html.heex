@@ -1,0 +1,177 @@
+<div :if={!@has_local_keypair} class="mx-auto max-w-4xl p-8">
+  <div class="bg-dark-secondary border border-dark-border rounded-lg p-6">
+    <p class="text-text-muted">Please configure your private key to manage follows.</p>
+  </div>
+</div>
+
+<div :if={@has_local_keypair} class="mx-auto max-w-6xl">
+  <.header>
+    <span class="text-neon-green">Manage Follows</span>
+    <:subtitle>
+      Control who you follow, set privacy, and organize into custom lists
+    </:subtitle>
+    <:actions>
+      <button
+        phx-click="publish_follow_list"
+        class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:scale-105"
+      >
+        <.icon name="hero-arrow-up-tray-mini" class="w-4 h-4" /> Publish Follow List
+      </button>
+    </:actions>
+  </.header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+    <!-- Follows List -->
+    <div class="lg:col-span-2 space-y-4">
+      <div class="bg-dark-secondary border border-dark-border rounded-lg p-4">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-text-primary">Your Follows ({length(@follows)})</h3>
+          
+          <div :if={MapSet.size(@selected_follows) > 0} class="flex items-center gap-2">
+            <span class="text-sm text-text-muted">{MapSet.size(@selected_follows)} selected</span>
+            <select
+              phx-change="add_to_list"
+              name="list_id"
+              class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+            >
+              <option value="">Add to list...</option>
+              <option :for={list <- @lists} value={list.id}>{list.name}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div
+            :for={follow <- @follows}
+            class="flex items-center gap-3 p-3 bg-dark-primary rounded-lg hover:bg-dark-tertiary transition-colors"
+          >
+            <input
+              type="checkbox"
+              phx-click="toggle_select"
+              phx-value-follow_id={follow.follow_id}
+              checked={MapSet.member?(@selected_follows, follow.follow_id)}
+              class="w-4 h-4 rounded bg-dark-tertiary border-dark-border text-neon-green focus:ring-neon-green focus:ring-offset-dark-primary"
+            />
+
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-text-primary">
+                  {follow.profile.name || follow.profile.pubkey |> String.slice(0..8)}
+                </span>
+                <span
+                  :if={follow.is_public}
+                  class="px-2 py-0.5 text-xs rounded-full bg-neon-green/20 text-neon-green"
+                >
+                  Public
+                </span>
+                <span
+                  :if={!follow.is_public}
+                  class="px-2 py-0.5 text-xs rounded-full bg-gray-600/20 text-gray-400"
+                >
+                  Private
+                </span>
+              </div>
+              <p :if={follow.notes} class="text-sm text-text-muted mt-1">{follow.notes}</p>
+            </div>
+
+            <button
+              phx-click="toggle_visibility"
+              phx-value-follow_id={follow.follow_id}
+              class="px-3 py-1 text-sm rounded border border-dark-border hover:bg-dark-tertiary transition-colors"
+            >
+              <.icon
+                name={if follow.is_public, do: "hero-eye-slash-mini", else: "hero-eye-mini"}
+                class="w-4 h-4"
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lists Sidebar -->
+    <div class="space-y-4">
+      <div class="bg-dark-secondary border border-dark-border rounded-lg p-4">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-text-primary">Custom Lists</h3>
+          <button
+            :if={!@show_new_list_form}
+            phx-click="show_new_list_form"
+            class="p-1 rounded hover:bg-dark-tertiary transition-colors"
+          >
+            <.icon name="hero-plus-mini" class="w-5 h-5 text-neon-green" />
+          </button>
+        </div>
+
+        <div :if={@show_new_list_form} class="mb-4 p-3 bg-dark-primary rounded-lg">
+          <form phx-submit="create_list" class="space-y-3">
+            <div>
+              <input
+                type="text"
+                name="name"
+                placeholder="List name"
+                required
+                class="w-full bg-dark-tertiary border border-dark-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+              />
+            </div>
+            <div>
+              <textarea
+                name="description"
+                placeholder="Description (optional)"
+                rows="2"
+                class="w-full bg-dark-tertiary border border-dark-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+              ></textarea>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-text-muted">Color:</label>
+              <input
+                type="color"
+                name="color"
+                value="#10b981"
+                class="w-10 h-8 rounded border border-dark-border bg-dark-tertiary"
+              />
+            </div>
+            <div class="flex gap-2">
+              <button
+                type="submit"
+                class="flex-1 px-3 py-1.5 bg-neon-green text-dark-primary rounded font-medium hover:bg-neon-green/90 transition-colors text-sm"
+              >
+                Create
+              </button>
+              <button
+                type="button"
+                phx-click="cancel_new_list"
+                class="flex-1 px-3 py-1.5 border border-dark-border rounded text-sm hover:bg-dark-tertiary transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="space-y-2">
+          <div
+            :for={list <- @lists}
+            class="p-3 bg-dark-primary rounded-lg hover:bg-dark-tertiary transition-colors"
+          >
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full" style={"background-color: #{list.color}"}></div>
+                <span class="font-medium text-text-primary">{list.name}</span>
+              </div>
+              <button
+                phx-click="delete_list"
+                phx-value-list_id={list.id}
+                data-confirm="Delete this list?"
+                class="p-1 rounded hover:bg-dark-secondary transition-colors"
+              >
+                <.icon name="hero-trash-mini" class="w-4 h-4 text-red-500" />
+              </button>
+            </div>
+            <p :if={list.description} class="text-xs text-text-muted">{list.description}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
