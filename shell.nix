@@ -9,6 +9,7 @@
     elixir
     hex
     postgresql
+    nodejs_20
     esbuild
     tailwindcss
     autoreconfHook
