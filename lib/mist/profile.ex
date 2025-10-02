@@ -312,4 +312,189 @@ defmodule Mist.Profile do
   def change_profile(%Profile{} = profile, attrs \\ %{}) do
     Profile.changeset(profile, attrs)
   end
+
+  # Privacy Management Functions
+
+  @doc """
+  Toggle the visibility of a follow relationship.
+  """
+  def toggle_follow_visibility(follow_id, is_public) do
+    from(f in Follows, where: f.id == ^follow_id)
+    |> Repo.update_all(set: [is_public: is_public])
+  end
+
+  @doc """
+  Get all public follows for a profile.
+  """
+  def get_public_follows(profile_id) do
+    from(f in Follows,
+      join: followed in Profile,
+      on: f.followed_id == followed.id,
+      where: f.follower_id == ^profile_id and f.is_public == true,
+      select: followed
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get all private follows for a profile.
+  """
+  def get_private_follows(profile_id) do
+    from(f in Follows,
+      join: followed in Profile,
+      on: f.followed_id == followed.id,
+      where: f.follower_id == ^profile_id and f.is_public == false,
+      select: followed
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get all follows for a profile with their privacy status.
+  """
+  def get_follows_with_privacy(profile_id) do
+    from(f in Follows,
+      join: followed in Profile,
+      on: f.followed_id == followed.id,
+      where: f.follower_id == ^profile_id,
+      select: %{
+        follow_id: f.id,
+        profile: followed,
+        is_public: f.is_public,
+        notes: f.notes
+      }
+    )
+    |> Repo.all()
+  end
+
+  # Follow List Management Functions
+
+  alias Mist.Profile.{FollowList, FollowListMembers}
+
+  @doc """
+  Create a new follow list for a profile.
+  """
+  def create_follow_list(profile_id, attrs) do
+    attrs = Map.put(attrs, :profile_id, profile_id)
+
+    %FollowList{}
+    |> FollowList.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Update a follow list.
+  """
+  def update_follow_list(list_id, attrs) do
+    FollowList
+    |> Repo.get(list_id)
+    |> case do
+      nil -> {:error, :not_found}
+      list -> list |> FollowList.changeset(attrs) |> Repo.update()
+    end
+  end
+
+  @doc """
+  Delete a follow list.
+  """
+  def delete_follow_list(list_id) do
+    FollowList
+    |> Repo.get(list_id)
+    |> case do
+      nil -> {:error, :not_found}
+      list -> Repo.delete(list)
+    end
+  end
+
+  @doc """
+  Get all lists for a profile.
+  """
+  def get_follow_lists(profile_id) do
+    from(fl in FollowList,
+      where: fl.profile_id == ^profile_id,
+      order_by: [asc: fl.name]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Add a follow to a list.
+  """
+  def add_follow_to_list(follow_id, list_id) do
+    %FollowListMembers{}
+    |> FollowListMembers.changeset(%{follow_id: follow_id, follow_list_id: list_id})
+    |> Repo.insert(on_conflict: :nothing)
+  end
+
+  @doc """
+  Remove a follow from a list.
+  """
+  def remove_follow_from_list(follow_id, list_id) do
+    from(m in FollowListMembers,
+      where: m.follow_id == ^follow_id and m.follow_list_id == ^list_id
+    )
+    |> Repo.delete_all()
+  end
+
+  @doc """
+  Get all follows in a list with profile information.
+  """
+  def get_follows_in_list(list_id) do
+    from(m in FollowListMembers,
+      join: f in Follows,
+      on: m.follow_id == f.id,
+      join: p in Profile,
+      on: f.followed_id == p.id,
+      where: m.follow_list_id == ^list_id,
+      select: %{follow_id: f.id, profile: p}
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get pubkeys of all follows in a list (for subscription filtering).
+  """
+  def get_pubkeys_in_list(list_id) do
+    from(m in FollowListMembers,
+      join: f in Follows,
+      on: m.follow_id == f.id,
+      join: p in Profile,
+      on: f.followed_id == p.id,
+      where: m.follow_list_id == ^list_id,
+      select: p.pubkey
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get all lists that a follow belongs to.
+  """
+  def get_lists_for_follow(follow_id) do
+    from(m in FollowListMembers,
+      join: l in FollowList,
+      on: m.follow_list_id == l.id,
+      where: m.follow_id == ^follow_id,
+      select: l
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get a follow list with its member count.
+  """
+  def get_list_with_count(list_id) do
+    list = Repo.get(FollowList, list_id)
+
+    case list do
+      nil ->
+        {:error, :not_found}
+
+      list ->
+        count =
+          from(m in FollowListMembers, where: m.follow_list_id == ^list_id, select: count())
+          |> Repo.one()
+
+        {:ok, Map.put(list, :member_count, count)}
+    end
+  end
 end
