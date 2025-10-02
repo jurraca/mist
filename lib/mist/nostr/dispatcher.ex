@@ -62,8 +62,15 @@ defmodule Mist.Nostr.Dispatcher do
   def subscribe_list_notes(list_id, opts \\ []) do
     alias Mist.Profile
     pubkeys = Profile.get_pubkeys_in_list(list_id)
-    filters = [%{kinds: [1, 6, 7, 9735], authors: pubkeys}]
-    subscribe(filters, opts)
+    
+    if length(pubkeys) > 0 do
+      filters = [%{kinds: [1, 6, 7, 9735], authors: pubkeys}]
+      subscribe(filters, opts)
+    else
+      # If no pubkeys in list, subscribe to nothing (empty subscription)
+      Logger.info("List #{list_id} has no follows, subscribing to all notes as fallback")
+      subscribe_all_notes(opts)
+    end
   end
 
   @impl GenServer
