@@ -50,7 +50,7 @@ defmodule Mist.Nostr.Dispatcher do
   def subscribe_hashtag_notes(hashtag, opts \\ []) do
     # Remove # if present and ensure lowercase
     clean_hashtag = hashtag |> String.replace("#", "") |> String.downcase()
-    filters = [%{kinds: [1], "#t" => [clean_hashtag]}]
+    filters = [%{kinds: [1], "#t": [clean_hashtag]}]
     subscribe(filters, opts)
   end
 

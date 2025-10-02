@@ -1,4 +1,4 @@
-modules = ["elixir"]
+modules = ["elixir", "nodejs-20"]
 
 [[ports]]
 localPort = 4000
@@ -8,6 +8,10 @@ exposeLocalhost = true
 [[ports]]
 localPort = 5000
 externalPort = 5000
+
+[[ports]]
+localPort = 34093
+externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
