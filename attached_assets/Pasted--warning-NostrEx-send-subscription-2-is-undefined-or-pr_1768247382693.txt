@@ -1,0 +1,71 @@
+
+    warning: NostrEx.send_subscription/2 is undefined or private. Did you mean:
+
+          * send_sub/1
+          * send_sub/2
+
+    │
+ 78 │     case NostrEx.send_subscription(filters, send_via: opts[:relays]) do
+    │                  ~
+    │
+    └─ lib/mist/nostr/dispatcher.ex:78:18: Mist.Nostr.Dispatcher.handle_cast/2
+
+    warning: NostrEx.connect_relay/1 is undefined or private. Did you mean:
+
+          * connect/1
+
+    │
+ 39 │     |> Enum.map(fn relay_url -> Task.async(fn -> NostrEx.connect_relay(relay_url) end) end)
+    │                                                          ~
+    │
+    └─ lib/mist/relay.ex:39:58: Mist.Relay.connect_relays/1
+
+    warning: NostrEx.close_subscription/1 is undefined or private. Did you mean:
+
+          * close_sub/1
+
+    │
+ 91 │       NostrEx.close_subscription(sub_id)
+    │               ~
+    │
+    └─ lib/mist/nostr/dispatcher.ex:91:15: Mist.Nostr.Dispatcher.handle_cast/2
+
+     warning: NostrEx.send_subscription/2 is undefined or private. Did you mean:
+
+           * send_sub/1
+           * send_sub/2
+
+     │
+ 102 │     case NostrEx.send_subscription(filter, send_via: relay_list) do
+     │                  ~
+     │
+     └─ lib/jobs/find_user_relays.ex:102:18: Mist.Jobs.FindUserRelays.subscribe_and_wait/3
+
+     warning: NostrEx.close_subscription/1 is undefined or private. Did you mean:
+
+           * close_sub/1
+
+     │
+ 123 │       NostrEx.close_subscription(sub_id)
+     │               ~
+     │
+     └─ lib/jobs/find_user_relays.ex:123:15: Mist.Jobs.FindUserRelays.handle_events_loop/6
+     └─ lib/jobs/find_user_relays.ex:128:15: Mist.Jobs.FindUserRelays.handle_events_loop/6
+     └─ lib/jobs/find_user_relays.ex:166:19: Mist.Jobs.FindUserRelays.handle_events_loop/6
+
+    warning: Logger.warning/1 is undefined or private. However, there is a macro with the same name and arity. Be sure to require Logger if you intend to invoke this macro
+    │
+ 40 │             Logger.warning("Could not decode relay info data")
+    │                    ~
+    │
+    └─ lib/mist_web/live/relay_live/index.ex:40:20: MistWeb.RelayLive.Index.handle_info/2
+
+    warning: NostrEx.connect_relay/1 is undefined or private. Did you mean:
+
+          * connect/1
+
+    │
+ 47 │     case NostrEx.connect_relay(url) do
+    │                  ~
+    │
+    └─ lib/mist_web/live/relay_live/form_component.ex:47:18: MistWeb.RelayLive.FormComponent.handle_event/3

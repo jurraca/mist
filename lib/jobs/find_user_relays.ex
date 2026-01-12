@@ -99,7 +99,7 @@ defmodule Mist.Jobs.FindUserRelays do
   defp subscribe_and_wait(pubkeys, relay_list, relay_type) do
     filter = [authors: pubkeys, kinds: @kinds]
 
-    case NostrEx.send_subscription(filter, send_via: relay_list) do
+    case NostrEx.send_sub(filter, send_via: relay_list) do
       {:ok, sub_id} ->
         Logger.info("Subscribed to #{relay_type} with sub_id: #{sub_id}")
         handle_subscription_events(sub_id, relay_list, relay_type)
@@ -120,12 +120,12 @@ defmodule Mist.Jobs.FindUserRelays do
 
     if elapsed > @subscription_timeout do
       Logger.info("Subscription to #{relay_type} timed out after #{elapsed}ms")
-      NostrEx.close_subscription(sub_id)
+      NostrEx.close_sub(sub_id)
     end
 
     if event_count >= @max_events_per_subscription do
       Logger.info("Max events (#{@max_events_per_subscription}) reached for #{relay_type}")
-      NostrEx.close_subscription(sub_id)
+      NostrEx.close_sub(sub_id)
     end
 
     receive do
@@ -163,7 +163,7 @@ defmodule Mist.Jobs.FindUserRelays do
             "Finished subscription to #{relay_type} - received EOSE from all relays (#{event_count} events)"
           )
 
-          NostrEx.close_subscription(sub_id)
+          NostrEx.close_sub(sub_id)
         else
           handle_events_loop(
             sub_id,

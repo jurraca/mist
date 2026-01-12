@@ -44,7 +44,7 @@ defmodule MistWeb.RelayLive.FormComponent do
   end
 
   def handle_event("save", %{"url" => url}, socket) do
-    case NostrEx.connect_relay(url) do
+    case NostrEx.connect(url) do
       {:ok, _pid} ->
         notify_parent(:saved)
 
