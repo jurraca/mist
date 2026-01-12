@@ -336,9 +336,8 @@ defmodule Mist.Profile do
           end)
 
         event_params =
-          NostrEx.create_event(%{
+          NostrEx.create_event(3, %{
             content: "",
-            kind: 3,
             tags: tags
           })
 

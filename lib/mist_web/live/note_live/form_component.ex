@@ -40,7 +40,7 @@ defmodule MistWeb.NoteLive.FormComponent do
 
   @impl true
   def handle_event("save", %{"note" => note_params}, socket) do
-    case Event.create_note(note_params) do
+    case NostrEx.create_event(1, note_params) do
       {:ok, note} ->
         notify_parent({:saved, note})
 

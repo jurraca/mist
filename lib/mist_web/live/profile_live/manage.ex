@@ -102,9 +102,8 @@ defmodule MistWeb.ProfileLive.Manage do
         |> Map.new()
         |> Jason.encode!()
 
-      event_params = NostrEx.create_event(%{
+      event_params = NostrEx.create_event(0, %{
         content: content,
-        kind: 0,
         tags: []
       })
 
