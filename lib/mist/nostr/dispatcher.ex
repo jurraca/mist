@@ -75,19 +75,13 @@ defmodule Mist.Nostr.Dispatcher do
 
   @impl GenServer
   def handle_cast({:subscribe, filters, opts}, state) do
-    # Cancel existing subscriptions first
-    Enum.each(state.active_subscriptions, fn sub_id ->
-      NostrEx.close_subscription(sub_id)
-      Logger.debug("Cancelled subscription #{sub_id}")
-    end)
-
     case NostrEx.send_subscription(filters, send_via: opts[:relays]) do
       {:ok, sub_id} ->
         Logger.debug("Created subscription #{sub_id} with #{length(filters)} filters")
-        {:noreply, %{state | active_subscriptions: [sub_id]}}
+        {:noreply, %{state | active_subscriptions: [sub_id | state.active_subscriptions]}}
       {:error, reason} ->
         Logger.error("Failed to create subscription: #{inspect(reason)}")
-        {:noreply, %{state | active_subscriptions: []}}
+        {:noreply, state}
     end
   end
 

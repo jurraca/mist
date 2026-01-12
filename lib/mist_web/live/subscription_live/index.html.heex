@@ -1,0 +1,104 @@
+<.header>
+  Subscriptions
+  <:subtitle>Create and manage Nostr relay subscriptions</:subtitle>
+</.header>
+
+<div class="mt-8 space-y-6">
+  <div class="bg-white shadow rounded-lg p-6">
+    <h3 class="text-lg font-medium mb-4">Create Subscription</h3>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Relay</label>
+        <select
+          phx-change="select_relay"
+          name="relay"
+          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+        >
+          <option value="">All connected relays</option>
+          <%= for relay <- @relays do %>
+            <option value={relay.url} selected={@selected_relay == relay.url}>
+              <%= relay.url %>
+            </option>
+          <% end %>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Kinds (comma-separated)
+        </label>
+        <input
+          type="text"
+          name="kinds"
+          value={@kinds}
+          phx-blur="update_filters"
+          placeholder="1, 6, 7"
+          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+        />
+        <p class="mt-1 text-sm text-gray-500">1=notes, 6=reposts, 7=reactions, 9735=zaps</p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Authors (comma-separated pubkeys)
+        </label>
+        <input
+          type="text"
+          name="authors"
+          value={@authors}
+          phx-blur="update_filters"
+          placeholder="pubkey1, pubkey2"
+          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+        />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Hashtag</label>
+        <input
+          type="text"
+          name="hashtag"
+          value={@hashtag}
+          phx-blur="update_filters"
+          placeholder="nostr"
+          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+        />
+      </div>
+
+      <div class="flex gap-4 pt-4">
+        <button
+          phx-click="subscribe"
+          class="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+        >
+          Subscribe
+        </button>
+        <button
+          phx-click="cancel_all"
+          class="inline-flex justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
+        >
+          Cancel All Subscriptions
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6">
+    <h3 class="text-lg font-medium mb-4">Connected Relays</h3>
+    <%= if @relays == [] do %>
+      <p class="text-gray-500">No relays connected. Add relays in the Relays page.</p>
+    <% else %>
+      <ul class="divide-y divide-gray-200">
+        <%= for relay <- @relays do %>
+          <li class="py-3 flex justify-between items-center">
+            <div>
+              <p class="font-medium"><%= relay.url %></p>
+            </div>
+            <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+              Connected
+            </span>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </div>
+</div>

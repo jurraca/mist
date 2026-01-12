@@ -3,24 +3,22 @@ defmodule MistWeb.NoteLive.Index do
 
   alias Mist.Nostr.Event
   alias Mist.{Relay, Profile}
-  alias Mist.Nostr.Dispatcher
 
   @impl true
   def mount(_params, _session, socket) do
-    Phoenix.PubSub.subscribe(Mist.PubSub, "notes")
-    Phoenix.PubSub.subscribe(Mist.PubSub, "note_counts")
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Mist.PubSub, "notes")
+      Phoenix.PubSub.subscribe(Mist.PubSub, "note_counts")
+    end
+
     relays = Relay.list_relays()
-    
-    # Load user's follow lists if available
+
     follow_lists =
       case Profile.get_my_profile() do
         {:ok, profile} -> Profile.get_follow_lists(profile.id)
         _ -> []
       end
-    
-    # Start with default subscription to all notes
-    Dispatcher.subscribe_all_notes()
-    
+
     {:ok, socket
      |> stream(:notes, [])
      |> assign(:graph_data, %{nodes: [], links: []})
@@ -101,7 +99,7 @@ defmodule MistWeb.NoteLive.Index do
          socket
          |> assign(:subscription_filter, {:list, list_id})
          |> assign(:selected_list, list_id)
-         |> update_subscription({:list, list_id})}
+         |> clear_ui_state()}
 
       true ->
         filter_atom = String.to_atom(filter)
@@ -109,7 +107,7 @@ defmodule MistWeb.NoteLive.Index do
          socket
          |> assign(:subscription_filter, filter_atom)
          |> assign(:selected_list, nil)
-         |> update_subscription(filter_atom)}
+         |> clear_ui_state()}
     end
   end
 
@@ -118,7 +116,7 @@ defmodule MistWeb.NoteLive.Index do
     {:noreply, 
       socket
       |> assign(:selected_relay, relay_url)
-      |> update_subscription(:single_relay, relay_url)}
+      |> clear_ui_state()}
   end
 
   @impl true
@@ -126,51 +124,19 @@ defmodule MistWeb.NoteLive.Index do
     {:noreply, 
       socket
       |> assign(:hashtag_filter, hashtag)
-      |> update_subscription(:hashtag, hashtag)}
+      |> clear_ui_state()}
   end
 
-  defp update_subscription(socket, filter_type, param \\ nil) do
-    # Cancel any pending batch timer
+  defp clear_ui_state(socket) do
     if socket.assigns.batch_timer_ref do
       Process.cancel_timer(socket.assigns.batch_timer_ref)
     end
-    
-    # Clear existing UI state and pending updates
-    cleared_socket = socket
+
+    socket
     |> stream(:notes, [], reset: true)
     |> assign(:graph_data, %{nodes: [], links: []})
     |> assign(:pending_graph_updates, [])
     |> assign(:batch_timer_ref, nil)
-    
-    case filter_type do
-      :all ->
-        Dispatcher.subscribe_all_notes()
-        
-      :single_relay when is_binary(param) and param != "" ->
-        Dispatcher.subscribe_relay_notes(param)
-        
-      :follows ->
-        case Profile.get_my_profile() do
-          {:ok, %{following: following}} when length(following) > 0 ->
-            pubkeys = Enum.map(following, & &1.pubkey)
-            Dispatcher.subscribe_follows_notes(pubkeys)
-          _ ->
-            # If no follows, fall back to all notes
-            Dispatcher.subscribe_all_notes()
-        end
-
-      {:list, list_id} ->
-        Dispatcher.subscribe_list_notes(list_id)
-        
-      :hashtag when is_binary(param) and param != "" ->
-        Dispatcher.subscribe_hashtag_notes(param)
-        
-      _ ->
-        # Default case: subscribe to all notes
-        Dispatcher.subscribe_all_notes()
-    end
-    
-    cleared_socket
   end
 
   defp update_stream_counts(socket, note_id, counts) do
