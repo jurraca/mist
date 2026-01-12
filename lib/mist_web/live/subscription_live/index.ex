@@ -43,8 +43,9 @@ defmodule MistWeb.SubscriptionLive.Index do
   def handle_event("subscribe", _params, socket) do
     filters = build_filters(socket.assigns)
     opts = build_opts(socket.assigns)
+    sub = NostrEx.create_sub(filters)
 
-    Dispatcher.subscribe(filters, opts)
+    Dispatcher.subscribe(sub, opts)
 
     {:noreply, put_flash(socket, :info, "Subscription started")}
   end

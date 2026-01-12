@@ -22,7 +22,7 @@ defmodule MistWeb.NoteLive.Index do
     {:ok, socket
      |> stream(:notes, [])
      |> assign(:graph_data, %{nodes: [], links: []})
-     |> assign(:view_mode, :graph)
+     |> assign(:view_mode, :list)
      |> assign(:subscription_filter, :all)
      |> assign(:available_relays, relays)
      |> assign(:selected_relay, nil)

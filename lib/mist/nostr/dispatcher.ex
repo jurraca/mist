@@ -3,6 +3,7 @@ defmodule Mist.Nostr.Dispatcher do
   require Logger
 
   alias Mist.Nostr.EventHandler
+  alias NostrEx.Subscription
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, %{active_subscriptions: []}, name: __MODULE__)
@@ -13,8 +14,8 @@ defmodule Mist.Nostr.Dispatcher do
     {:ok, state}
   end
 
-  def subscribe(filters, opts \\ []) when is_list(filters) do
-    GenServer.cast(__MODULE__, {:subscribe, filters, opts})
+  def subscribe(%Subscription{} = sub, opts \\ []) do
+    GenServer.cast(__MODULE__, {:subscribe, sub, opts})
   end
 
   def cancel_all_subscriptions do
