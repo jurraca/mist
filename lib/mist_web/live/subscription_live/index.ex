@@ -56,24 +56,24 @@ defmodule MistWeb.SubscriptionLive.Index do
   end
 
   defp build_filters(assigns) do
-    base_filter = %{}
+    base_filter = [] 
 
     base_filter =
       case parse_kinds(assigns.kinds) do
         [] -> base_filter
-        kinds -> Map.put(base_filter, :kinds, kinds)
+        kinds -> Keyword.put(base_filter, :kinds, kinds)
       end
 
     base_filter =
       case parse_authors(assigns.authors) do
         [] -> base_filter
-        authors -> Map.put(base_filter, :authors, authors)
+        authors -> Keyword.put(base_filter, :authors, authors)
       end
 
     base_filter =
       case String.trim(assigns.hashtag) do
         "" -> base_filter
-        tag -> Map.put(base_filter, :"#t", [String.downcase(tag)])
+        tag -> Keyword.put(base_filter, :"#t", [String.downcase(tag)])
       end
 
     [base_filter]

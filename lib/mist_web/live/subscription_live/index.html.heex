@@ -1,19 +1,19 @@
 <.header>
-  Subscriptions
-  <:subtitle>Create and manage Nostr relay subscriptions</:subtitle>
+  <span class="text-neon-green">Subscriptions</span>
+  <:subtitle><span class="text-text-secondary">Create and manage Nostr relay subscriptions</span></:subtitle>
 </.header>
 
 <div class="mt-8 space-y-6">
-  <div class="bg-white shadow rounded-lg p-6">
-    <h3 class="text-lg font-medium mb-4">Create Subscription</h3>
+  <div class="bg-dark-secondary border border-dark-border shadow rounded-lg p-6">
+    <h3 class="text-lg font-medium mb-4 text-neon-purple">Create Subscription</h3>
 
     <div class="space-y-4">
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Relay</label>
+        <label class="block text-sm font-medium text-text-secondary mb-1">Relay</label>
         <select
           phx-change="select_relay"
           name="relay"
-          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          class="block w-full rounded-md border-dark-border bg-dark-tertiary text-text-primary shadow-sm focus:border-neon-green focus:ring-neon-green"
         >
           <option value="">All connected relays</option>
           <%= for relay <- @relays do %>
@@ -25,7 +25,7 @@
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
+        <label class="block text-sm font-medium text-text-secondary mb-1">
           Kinds (comma-separated)
         </label>
         <input
@@ -34,13 +34,13 @@
           value={@kinds}
           phx-blur="update_filters"
           placeholder="1, 6, 7"
-          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          class="block w-full rounded-md border-dark-border bg-dark-tertiary text-text-primary shadow-sm focus:border-neon-green focus:ring-neon-green"
         />
-        <p class="mt-1 text-sm text-gray-500">1=notes, 6=reposts, 7=reactions, 9735=zaps</p>
+        <p class="mt-1 text-sm text-text-muted">1=notes, 6=reposts, 7=reactions, 9735=zaps</p>
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
+        <label class="block text-sm font-medium text-text-secondary mb-1">
           Authors (comma-separated pubkeys)
         </label>
         <input
@@ -49,32 +49,32 @@
           value={@authors}
           phx-blur="update_filters"
           placeholder="pubkey1, pubkey2"
-          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          class="block w-full rounded-md border-dark-border bg-dark-tertiary text-text-primary shadow-sm focus:border-neon-green focus:ring-neon-green"
         />
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Hashtag</label>
+        <label class="block text-sm font-medium text-text-secondary mb-1">Hashtag</label>
         <input
           type="text"
           name="hashtag"
           value={@hashtag}
           phx-blur="update_filters"
           placeholder="nostr"
-          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          class="block w-full rounded-md border-dark-border bg-dark-tertiary text-text-primary shadow-sm focus:border-neon-green focus:ring-neon-green"
         />
       </div>
 
       <div class="flex gap-4 pt-4">
         <button
           phx-click="subscribe"
-          class="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+          class="inline-flex justify-center rounded-md bg-neon-green px-4 py-2 text-sm font-semibold text-dark-primary shadow-sm hover:bg-opacity-80 transition-all"
         >
           Subscribe
         </button>
         <button
           phx-click="cancel_all"
-          class="inline-flex justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
+          class="inline-flex justify-center rounded-md border border-red-600 px-4 py-2 text-sm font-semibold text-red-600 shadow-sm hover:bg-red-600 hover:text-white transition-all"
         >
           Cancel All Subscriptions
         </button>
@@ -82,18 +82,18 @@
     </div>
   </div>
 
-  <div class="bg-white shadow rounded-lg p-6">
-    <h3 class="text-lg font-medium mb-4">Connected Relays</h3>
+  <div class="bg-dark-secondary border border-dark-border shadow rounded-lg p-6">
+    <h3 class="text-lg font-medium mb-4 text-neon-purple">Connected Relays</h3>
     <%= if @relays == [] do %>
-      <p class="text-gray-500">No relays connected. Add relays in the Relays page.</p>
+      <p class="text-text-muted">No relays connected. Add relays in the Relays page.</p>
     <% else %>
-      <ul class="divide-y divide-gray-200">
+      <ul class="divide-y divide-dark-border">
         <%= for relay <- @relays do %>
           <li class="py-3 flex justify-between items-center">
             <div>
-              <p class="font-medium"><%= relay.url %></p>
+              <p class="font-medium text-text-primary"><%= relay.url %></p>
             </div>
-            <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+            <span class="inline-flex items-center rounded-full bg-neon-green/10 border border-neon-green/20 px-2.5 py-0.5 text-xs font-medium text-neon-green">
               Connected
             </span>
           </li>
