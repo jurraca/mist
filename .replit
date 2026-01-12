@@ -33,8 +33,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "mix phx.server"
-waitForPort = 5000
+args = "mix deps.get && mix phx.server"
 
 [workflows.workflow.metadata]
 outputType = "webview"

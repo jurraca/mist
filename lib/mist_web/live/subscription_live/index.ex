@@ -43,7 +43,7 @@ defmodule MistWeb.SubscriptionLive.Index do
   def handle_event("subscribe", _params, socket) do
     filters = build_filters(socket.assigns)
     opts = build_opts(socket.assigns)
-    sub = NostrEx.create_sub(filters)
+    {:ok, sub} = NostrEx.create_sub(filters)
 
     Dispatcher.subscribe(sub, opts)
 

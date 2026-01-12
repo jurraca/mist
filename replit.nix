@@ -4,5 +4,7 @@
     pkgs.postgresql
     pkgs.elixir
     pkgs.autoreconfHook
+    pkgs.inotify-tools
+    
   ];
 }
