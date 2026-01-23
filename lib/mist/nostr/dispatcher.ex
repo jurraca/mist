@@ -22,58 +22,6 @@ defmodule Mist.Nostr.Dispatcher do
     GenServer.cast(__MODULE__, :cancel_all)
   end
 
-  def subscribe_profiles(pubkeys, opts \\ []) do
-    pubkeys = if is_list(pubkeys), do: pubkeys, else: [pubkeys]
-    filters = [%{kinds: [0, 10002], authors: pubkeys}]
-    subscribe(filters, opts)
-  end
-
-  def subscribe_follows(pubkey, opts \\ []) do
-    filters = [%{kinds: [3], authors: [pubkey]}]
-    subscribe(filters, opts)
-  end
-
-  def subscribe_notes(pubkey, opts \\ []) do
-    filters = [%{kinds: [1], authors: [pubkey]}]
-    subscribe(filters, opts)
-  end
-
-  def subscribe_all_notes(opts \\ []) do
-    filters = [%{kinds: [1, 6, 7, 9735]}]  # Include reactions, boosts, and zaps
-    subscribe(filters, opts)
-  end
-
-  def subscribe_relay_notes(relay_url, opts \\ []) do
-    filters = [%{kinds: [1, 6, 7, 9735]}]  # Include reactions, boosts, and zaps
-    subscribe(filters, Keyword.put(opts, :relays, [relay_url]))
-  end
-
-  def subscribe_hashtag_notes(hashtag, opts \\ []) do
-    # Remove # if present and ensure lowercase
-    clean_hashtag = hashtag |> String.replace("#", "") |> String.downcase()
-    filters = [%{kinds: [1], "#t": [clean_hashtag]}]
-    subscribe(filters, opts)
-  end
-
-  def subscribe_follows_notes(pubkeys, opts \\ []) when is_list(pubkeys) do
-    filters = [%{kinds: [1, 6, 7, 9735], authors: pubkeys}]  # Include reactions, boosts, and zaps
-    subscribe(filters, opts)
-  end
-
-  def subscribe_list_notes(list_id, opts \\ []) do
-    alias Mist.Profile
-    pubkeys = Profile.get_pubkeys_in_list(list_id)
-    
-    if length(pubkeys) > 0 do
-      filters = [%{kinds: [1, 6, 7, 9735], authors: pubkeys}]
-      subscribe(filters, opts)
-    else
-      # If no pubkeys in list, subscribe to nothing (empty subscription)
-      Logger.info("List #{list_id} has no follows, subscribing to all notes as fallback")
-      subscribe_all_notes(opts)
-    end
-  end
-
   @impl GenServer
   def handle_cast({:subscribe, filters, opts}, state) do
     case NostrEx.send_sub(filters, send_via: opts[:relays]) do
