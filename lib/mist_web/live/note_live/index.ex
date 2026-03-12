@@ -79,7 +79,7 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def handle_info({MistWeb.NoteLive.FormComponent, {:saved, note}}, socket) do
-    {:noreply, stream_insert(socket, :notes, note)}
+    {:noreply, stream_insert(socket, :notes, note, at: 0)}
   end
 
   def handle_info(_, socket), do: {:noreply, socket}
