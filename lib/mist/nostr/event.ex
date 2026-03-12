@@ -31,10 +31,10 @@ defmodule Mist.Nostr.Event do
     |> unique_constraint([:event_id])
   end
 
-  def format_attrs(%{"id" => event_id, "content" => content} = attrs) do
+  def format_attrs(%{"id" => event_id, "content" => _content} = attrs) do
     attrs
     |> Map.put("event_id", event_id)
-    |> Map.update!("content", fn content -> if(content == "", do: nil, else: content) end)
+    |> Map.update!("content", fn c -> if(c == "", do: nil, else: c) end)
   end
 
   def max_created_at(opts \\ []) do

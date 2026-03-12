@@ -85,12 +85,12 @@ defmodule Mist.Nostr.Initializer do
   defp fetch_own_events(pubkey, relay_url) do
     filter = [authors: [pubkey], kinds: @bootstrap_kinds]
 
-    case NostrEx.send_sub(filter, send_via: [relay_url]) do
-      {:ok, sub_id} ->
-        Logger.info("Initializer: subscribed to #{relay_url} (sub_id: #{sub_id})")
-        event_count = receive_events_loop(sub_id, relay_url)
-        Logger.info("Initializer: bootstrap complete — processed #{event_count} events")
-
+    with {:ok, sub} <- NostrEx.create_sub(filter),
+         {:ok, sub_id} <- NostrEx.send_sub(sub, send_via: [relay_url]) do
+      Logger.info("Initializer: subscribed to #{relay_url} (sub_id: #{sub_id})")
+      event_count = receive_events_loop(sub_id, relay_url)
+      Logger.info("Initializer: bootstrap complete — processed #{event_count} events")
+    else
       {:error, reason} ->
         Logger.warning("Initializer: failed to subscribe on #{relay_url}: #{inspect(reason)}")
     end

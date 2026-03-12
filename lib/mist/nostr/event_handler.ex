@@ -65,7 +65,7 @@ defmodule Mist.Nostr.EventHandler do
   end
 
   # Reactions (kind 7)
-  def process_event(%Event{kind: 7, tags: tags} = event) do
+  def process_event(%Event{kind: 7, tags: tags} = _event) do
     case extract_referenced_note_id(tags) do
       {:ok, note_id} ->
         increment_reaction_count(note_id)
@@ -76,7 +76,7 @@ defmodule Mist.Nostr.EventHandler do
   end
 
   # Boosts/Reposts (kind 6)  
-  def process_event(%Event{kind: 6, tags: tags} = event) do
+  def process_event(%Event{kind: 6, tags: tags} = _event) do
     case extract_referenced_note_id(tags) do
       {:ok, note_id} ->
         increment_boost_count(note_id)
@@ -137,7 +137,7 @@ defmodule Mist.Nostr.EventHandler do
     end
   end
 
-  defp extract_zap_amount(event) do
+  defp extract_zap_amount(_event) do
     # Try to extract amount from bolt11 invoice in tags or content
     # For now, return a default amount - this would need proper bolt11 parsing
     1000

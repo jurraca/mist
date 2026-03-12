@@ -2,7 +2,6 @@ defmodule MistWeb.UserProfile.Index do
   use MistWeb, :live_view
 
   alias Mist.{Profile, Nostr.Signer}
-  alias Nostr.Event
 
   @impl true
   def mount(_params, _session, socket) do
@@ -54,7 +53,7 @@ defmodule MistWeb.UserProfile.Index do
     }
 
     case Signer.sign_event(event_params) do
-      {:ok, event} ->
+      {:ok, _event} ->
         # Update local profile with the new data
         profile_attrs = Map.merge(params, %{"pubkey" => socket.assigns.pubkey})
 

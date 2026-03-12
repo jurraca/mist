@@ -13,6 +13,4 @@ defmodule MistWeb.RelayLive.New do
      |> assign(:page_title, "New Relay")
      }
   end
-
-  defp page_title(:new), do: "New Relay"
 end

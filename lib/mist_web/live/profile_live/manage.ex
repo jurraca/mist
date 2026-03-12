@@ -1,7 +1,6 @@
 defmodule MistWeb.ProfileLive.Manage do
   use MistWeb, :live_view
   alias Mist.{Profile, Nostr.Keys, Nostr.Signer}
-  alias Nostr.Event
 
   @impl true
   def mount(_params, _session, socket) do

@@ -1,8 +1,6 @@
 defmodule MistWeb.RelayLive.FormComponent do
   use MistWeb, :live_component
 
-  alias Mist.Relay
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -28,7 +26,7 @@ defmodule MistWeb.RelayLive.FormComponent do
   end
 
   @impl true
-  def update(%{relay: relay} = assigns, socket) do
+  def update(%{relay: _relay} = assigns, socket) do
     {:ok,
      socket
      |> assign(assigns)

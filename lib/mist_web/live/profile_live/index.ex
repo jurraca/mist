@@ -3,7 +3,7 @@ defmodule MistWeb.ProfileLive.Index do
 
   alias Mist.Profile
   alias Mist.Nostr.NIP19
-  alias Nostr.{Bech32, Event}
+  alias Nostr.Bech32
 
   @impl true
   def mount(_params, _session, socket) do
@@ -17,7 +17,7 @@ defmodule MistWeb.ProfileLive.Index do
          |> assign(:search_form, to_form(%{"search_term" => ""}))
          |> assign(:parsed_profile, nil)}
     else
-      {:error, reason} ->
+      {:error, _reason} ->
       {:ok, socket
          |> stream(:profiles, [])
          |> assign(:search_form, to_form(%{"search_term" => ""}))

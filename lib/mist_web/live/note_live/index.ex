@@ -78,6 +78,13 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   @impl true
+  def handle_info({MistWeb.NoteLive.FormComponent, {:saved, note}}, socket) do
+    {:noreply, stream_insert(socket, :notes, note)}
+  end
+
+  def handle_info(_, socket), do: {:noreply, socket}
+
+  @impl true
   def terminate(_reason, socket) do
     if socket.assigns.batch_timer_ref do
       Process.cancel_timer(socket.assigns.batch_timer_ref)
@@ -346,13 +353,6 @@ defmodule MistWeb.NoteLive.Index do
       }
     end)
   end
-
-  @impl true
-  def handle_info({MistWeb.NoteLive.FormComponent, {:saved, note}}, socket) do
-    {:noreply, stream_insert(socket, :notes, note)}
-  end
-
-  def handle_info(_, socket), do: {:noreply, socket}
 
   defp load_stored_notes do
     import Ecto.Query

@@ -21,12 +21,15 @@ defmodule MistWeb.Router do
     get "/home", PageController, :home
     live "/relays", RelayLive.Index, :index
     live "/relays/new", RelayLive.Index, :new
+    live "/relays/:id", RelayLive.Show, :show
+    live "/relays/:id/show/edit", RelayLive.Show, :edit
     live "/subscriptions", SubscriptionLive.Index, :index
     live "/notes", NoteLive.Index, :index
     live "/notes/new", NoteLive.Index, :new
     live "/profiles", ProfileLive.Index, :index
     live "/profiles/new", ProfileLive.Index, :new
-    live "/profiles/:id", ProfileLive.Index, :show
+    live "/profiles/:id", ProfileLive.Show, :show
+    live "/profiles/:id/show/edit", ProfileLive.Show, :edit
     live "/profile/manage", ProfileLive.Manage, :index
     live "/profile/manage/follows", ProfileLive.ManageFollows, :index
     live "/profile", UserProfile.Index, :index

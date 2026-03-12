@@ -1,6 +1,8 @@
 defmodule MistWeb.RelayLive.Index do
   use MistWeb, :live_view
 
+  require Logger
+
   alias Mist.Relay
   alias NostrEx.RelayManager
 

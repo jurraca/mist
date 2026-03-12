@@ -95,11 +95,11 @@ defmodule Mist.Jobs.FindUserRelays do
     since = Event.since_for_filter(kinds: @kinds, authors: pubkeys)
     filter = [authors: pubkeys, kinds: @kinds, since: since]
 
-    case NostrEx.send_sub(filter, send_via: relay_list) do
-      {:ok, sub_id} ->
-        Logger.info("Subscribed to #{relay_type} with sub_id: #{sub_id}")
-        handle_subscription_events(sub_id, relay_list, relay_type)
-
+    with {:ok, sub} <- NostrEx.create_sub(filter),
+         {:ok, sub_id} <- NostrEx.send_sub(sub, send_via: relay_list) do
+      Logger.info("Subscribed to #{relay_type} with sub_id: #{sub_id}")
+      handle_subscription_events(sub_id, relay_list, relay_type)
+    else
       {:error, reason} ->
         Logger.error("Failed to subscribe to #{relay_type}: #{inspect(reason)}")
     end
