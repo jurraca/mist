@@ -1,7 +1,7 @@
 defmodule MistWeb.NoteLive.Index do
   use MistWeb, :live_view
 
-  alias Mist.Nostr.Event
+  alias Mist.Nostr.{Dispatcher, Event}
   alias Mist.{Relay, Profile}
 
   @impl true
@@ -79,10 +79,10 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def terminate(_reason, socket) do
-    # Cancel any pending batch timer on LiveView termination
     if socket.assigns.batch_timer_ref do
       Process.cancel_timer(socket.assigns.batch_timer_ref)
     end
+    Dispatcher.cancel_named_subscription(:notes_feed)
     :ok
   end
 
@@ -97,36 +97,50 @@ defmodule MistWeb.NoteLive.Index do
       String.starts_with?(filter, "list:") ->
         [_, list_id] = String.split(filter, ":")
         list_id = String.to_integer(list_id)
-        {:noreply,
-         socket
-         |> assign(:subscription_filter, {:list, list_id})
-         |> assign(:selected_list, list_id)
-         |> clear_ui_state()}
+
+        socket =
+          socket
+          |> assign(:subscription_filter, {:list, list_id})
+          |> assign(:selected_list, list_id)
+          |> clear_ui_state()
+
+        socket = maybe_flash_no_relays(apply_subscription(socket), socket)
+        {:noreply, socket}
 
       true ->
         filter_atom = String.to_atom(filter)
-        {:noreply,
-         socket
-         |> assign(:subscription_filter, filter_atom)
-         |> assign(:selected_list, nil)
-         |> clear_ui_state()}
+
+        socket =
+          socket
+          |> assign(:subscription_filter, filter_atom)
+          |> assign(:selected_list, nil)
+          |> clear_ui_state()
+
+        socket = maybe_flash_no_relays(apply_subscription(socket), socket)
+        {:noreply, socket}
     end
   end
 
-  @impl true 
+  @impl true
   def handle_event("change_relay", %{"relay_url" => relay_url}, socket) do
-    {:noreply, 
+    socket =
       socket
       |> assign(:selected_relay, relay_url)
-      |> clear_ui_state()}
+      |> clear_ui_state()
+
+    socket = maybe_flash_no_relays(apply_subscription(socket), socket)
+    {:noreply, socket}
   end
 
   @impl true
   def handle_event("change_hashtag", %{"hashtag" => hashtag}, socket) do
-    {:noreply, 
+    socket =
       socket
       |> assign(:hashtag_filter, hashtag)
-      |> clear_ui_state()}
+      |> clear_ui_state()
+
+    socket = maybe_flash_no_relays(apply_subscription(socket), socket)
+    {:noreply, socket}
   end
 
   defp clear_ui_state(socket) do
@@ -139,6 +153,85 @@ defmodule MistWeb.NoteLive.Index do
     |> assign(:graph_data, %{nodes: [], links: []})
     |> assign(:pending_graph_updates, [])
     |> assign(:batch_timer_ref, nil)
+  end
+
+  defp maybe_flash_no_relays(:no_relays, socket) do
+    put_flash(socket, :error, "No relays connected. Please connect to a relay first.")
+  end
+
+  defp maybe_flash_no_relays(_, socket), do: socket
+
+  defp apply_subscription(socket) do
+    connected_relays = NostrEx.list_relays()
+
+    if connected_relays == [] do
+      :no_relays
+    else
+      case build_subscription_filter(socket.assigns) do
+        {:ok, filter_opts} ->
+          {:ok, sub} = NostrEx.create_sub(filter_opts[:filters])
+          opts = if filter_opts[:relay], do: [relays: [filter_opts[:relay]]], else: []
+          Dispatcher.subscribe_with_name(:notes_feed, sub, opts)
+
+        :skip ->
+          Dispatcher.cancel_named_subscription(:notes_feed)
+      end
+    end
+  end
+
+  defp build_subscription_filter(assigns) do
+    case assigns.subscription_filter do
+      :all ->
+        {:ok, %{filters: [kinds: [1]]}}
+
+      :following ->
+        case Profile.get_my_profile() do
+          {:ok, profile} ->
+            pubkeys =
+              Profile.get_follows_with_privacy(profile.id)
+              |> Enum.map(fn f -> f.profile.pubkey end)
+
+            if pubkeys == [] do
+              :skip
+            else
+              {:ok, %{filters: [kinds: [1], authors: pubkeys]}}
+            end
+
+          _ ->
+            :skip
+        end
+
+      :single_relay ->
+        relay = assigns.selected_relay
+
+        if relay && relay != "" do
+          {:ok, %{filters: [kinds: [1]], relay: relay}}
+        else
+          :skip
+        end
+
+      :hashtag ->
+        tag = assigns.hashtag_filter
+
+        if tag && tag != "" do
+          clean_tag = tag |> String.trim() |> String.downcase() |> String.replace(~r/^#/, "")
+          {:ok, %{filters: [kinds: [1], "#t": [clean_tag]]}}
+        else
+          :skip
+        end
+
+      {:list, list_id} ->
+        pubkeys = Profile.get_pubkeys_in_list(list_id)
+
+        if pubkeys == [] do
+          :skip
+        else
+          {:ok, %{filters: [kinds: [1], authors: pubkeys]}}
+        end
+
+      _ ->
+        {:ok, %{filters: [kinds: [1]]}}
+    end
   end
 
   defp update_stream_counts(socket, note_id, counts) do

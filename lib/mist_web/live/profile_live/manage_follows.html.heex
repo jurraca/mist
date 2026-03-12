@@ -20,6 +20,29 @@
     </:actions>
   </.header>
 
+  <div class="bg-dark-secondary border border-dark-border rounded-lg p-4 mt-8">
+    <h3 class="text-lg font-semibold text-text-primary mb-3">Add a Follow</h3>
+    <form phx-submit="add_follow" class="flex gap-3 items-start">
+      <div class="flex-1">
+        <input
+          type="text"
+          name="follow_input"
+          value={@follow_input}
+          phx-change="update_follow_input"
+          placeholder="Paste a pubkey (hex) or npub..."
+          class={"w-full bg-dark-tertiary border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green #{if @follow_input_error, do: "border-red-500", else: "border-dark-border"}"}
+        />
+        <p :if={@follow_input_error} class="text-red-400 text-xs mt-1">{@follow_input_error}</p>
+      </div>
+      <button
+        type="submit"
+        class="px-4 py-2 bg-neon-green text-dark-primary rounded font-medium hover:bg-neon-green/90 transition-colors text-sm"
+      >
+        Follow
+      </button>
+    </form>
+  </div>
+
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
     <!-- Follows List -->
     <div class="lg:col-span-2 space-y-4">

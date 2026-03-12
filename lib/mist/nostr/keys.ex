@@ -20,6 +20,27 @@ defmodule Mist.Nostr.Keys do
     end
   end
 
+  def decode_pubkey_input(input) do
+    input = String.trim(input)
+
+    cond do
+      String.starts_with?(input, "npub") ->
+        case ExBech32.decode(input) do
+          {:ok, {"npub", data, _}} ->
+            {:ok, Base.encode16(data, case: :lower)}
+
+          _ ->
+            {:error, "Invalid npub format"}
+        end
+
+      Regex.match?(~r/^[0-9a-fA-F]{64}$/, input) ->
+        {:ok, String.downcase(input)}
+
+      true ->
+        {:error, "Input must be a 64-character hex pubkey or an npub"}
+    end
+  end
+
   def derive_public_key do
     case get_private_key() do
       {:ok, priv_key} ->

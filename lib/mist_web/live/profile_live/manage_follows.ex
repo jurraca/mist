@@ -23,7 +23,9 @@ defmodule MistWeb.ProfileLive.ManageFollows do
            selected_follows: MapSet.new(),
            show_new_list_form: false,
            new_list_form: to_form(%{"name" => "", "description" => "", "color" => "#10b981"}),
-           has_local_keypair: true
+           has_local_keypair: true,
+           follow_input: "",
+           follow_input_error: nil
          )}
 
       {:error, _reason} ->
@@ -126,6 +128,45 @@ defmodule MistWeb.ProfileLive.ManageFollows do
      socket
      |> assign(selected_follows: MapSet.new())
      |> put_flash(:info, "Added to list")}
+  end
+
+  @impl true
+  def handle_event("update_follow_input", %{"follow_input" => value}, socket) do
+    {:noreply, assign(socket, follow_input: value, follow_input_error: nil)}
+  end
+
+  @impl true
+  def handle_event("add_follow", %{"follow_input" => input}, socket) do
+    case Keys.decode_pubkey_input(input) do
+      {:ok, hex_pubkey} ->
+        if hex_pubkey == socket.assigns.pubkey do
+          {:noreply, assign(socket, follow_input_error: "You cannot follow yourself")}
+        else
+          case Profile.follow_profile(socket.assigns.pubkey, hex_pubkey) do
+            {:ok, _follow} ->
+              follows = Profile.get_follows_with_privacy(socket.assigns.profile.id)
+
+              {:noreply,
+               socket
+               |> assign(follows: follows, follow_input: "", follow_input_error: nil)
+               |> put_flash(:info, "Follow added successfully")}
+
+            {:error, %Ecto.Changeset{} = changeset} ->
+              if Keyword.has_key?(changeset.errors, :follower_id) ||
+                   Keyword.has_key?(changeset.errors, :followed_id) do
+                {:noreply, assign(socket, follow_input_error: "Already following this pubkey")}
+              else
+                {:noreply, assign(socket, follow_input_error: "Failed to add follow")}
+              end
+
+            {:error, _reason} ->
+              {:noreply, assign(socket, follow_input_error: "Failed to add follow")}
+          end
+        end
+
+      {:error, reason} ->
+        {:noreply, assign(socket, follow_input_error: reason)}
+    end
   end
 
   @impl true
