@@ -19,8 +19,10 @@ defmodule MistWeb.NoteLive.Index do
         _ -> []
       end
 
+    stored_notes = load_stored_notes()
+
     {:ok, socket
-     |> stream(:notes, [])
+     |> stream(:notes, stored_notes)
      |> assign(:graph_data, %{nodes: [], links: []})
      |> assign(:view_mode, :list)
      |> assign(:subscription_filter, :all)
@@ -140,10 +142,7 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   defp update_stream_counts(socket, note_id, counts) do
-    # Update the note in the stream by using the note_id as the key
-    # Phoenix LiveView will automatically replace the entry with the same id
-    updated_note = Map.merge(%{id: note_id}, counts)
-    stream_insert(socket, :notes, updated_note, dom_id: "notes-#{note_id}")
+    push_event(socket, "update_note_counts", %{note_id: note_id, counts: counts})
   end
 
   defp queue_graph_update(socket, note) do
@@ -261,4 +260,32 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   def handle_info(_, socket), do: {:noreply, socket}
+
+  defp load_stored_notes do
+    import Ecto.Query
+
+    Mist.Nostr.Event
+    |> where([e], e.kind == 1)
+    |> order_by([e], desc: e.created_at)
+    |> limit(50)
+    |> Mist.Repo.all()
+    |> Enum.map(fn event ->
+      profile = Profile.get_by_pubkey(event.pubkey)
+
+      %{
+        id: event.event_id,
+        pubkey: event.pubkey,
+        content: event.content,
+        created_at: event.created_at,
+        sig: event.sig,
+        kind: event.kind,
+        tags: [],
+        author: if(profile, do: profile.name, else: nil),
+        bot: if(profile, do: profile.bot, else: false),
+        reaction_count: 0,
+        boost_count: 0,
+        zap_amount: 0
+      }
+    end)
+  end
 end

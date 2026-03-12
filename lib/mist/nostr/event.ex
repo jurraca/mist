@@ -19,7 +19,7 @@ defmodule Mist.Nostr.Event do
   def changeset(event, attrs) do
     event
     |> cast(attrs, [:event_id, :pubkey, :created_at, :kind, :content, :sig])
-    |> validate_required([:event_id, :pubkey, :created_at, :kind, :tags, :content, :sig])
+    |> validate_required([:event_id, :pubkey, :created_at, :kind, :content, :sig])
     |> validate_length(:pubkey, is: 64)
     |> validate_length(:event_id, is: 64)
     |> validate_length(:sig, is: 128)

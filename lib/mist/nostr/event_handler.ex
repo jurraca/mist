@@ -35,12 +35,30 @@ defmodule Mist.Nostr.EventHandler do
   def process_event(%Event{kind: 1} = event) do
     topic = "notes"
     event_map = fetch_author_data(event)
-    # Write to a kind-1-only DB table
+
+    attrs = %{
+      event_id: event.id,
+      pubkey: event.pubkey,
+      created_at: event.created_at,
+      kind: event.kind,
+      content: event.content,
+      sig: event.sig
+    }
+
+    case Mist.Repo.insert(
+           Mist.Nostr.Event.changeset(%Mist.Nostr.Event{}, attrs),
+           on_conflict: :nothing,
+           conflict_target: [:event_id]
+         ) do
+      {:ok, _} -> :ok
+      {:error, changeset} ->
+        Logger.debug("Failed to persist kind 1 event: #{inspect(changeset.errors)}")
+    end
+
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event_map)
   end
 
   def process_event(%Event{kind: 3, pubkey: pubkey, tags: tags} = event) do
-    dbg(event)
     topic = "profiles"
     Profile.add_follow_list(pubkey, tags)
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
@@ -81,7 +99,7 @@ defmodule Mist.Nostr.EventHandler do
   end
 
   def process_event(event) do
-    dbg(event)
+    Logger.debug("Unhandled event kind: #{event.kind}")
     topic = "events:#{event.kind}"
     # write to a general events table
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)

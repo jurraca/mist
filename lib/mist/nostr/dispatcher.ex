@@ -18,15 +18,30 @@ defmodule Mist.Nostr.Dispatcher do
     GenServer.cast(__MODULE__, {:subscribe, sub, opts})
   end
 
+  def subscribe_profiles(pubkeys, opts \\ []) when is_list(pubkeys) do
+    case Subscription.new(authors: pubkeys, kinds: [0, 10002]) do
+      {:ok, sub} -> subscribe(sub, opts)
+      {:error, reason} -> Logger.error("Failed to create profile subscription: #{inspect(reason)}")
+    end
+  end
+
+  def subscribe_follows(pubkey) when is_binary(pubkey) do
+    case Subscription.new(authors: [pubkey], kinds: [3]) do
+      {:ok, sub} -> subscribe(sub, [])
+      {:error, reason} -> Logger.error("Failed to create follows subscription: #{inspect(reason)}")
+    end
+  end
+
   def cancel_all_subscriptions do
     GenServer.cast(__MODULE__, :cancel_all)
   end
 
   @impl GenServer
-  def handle_cast({:subscribe, filters, opts}, state) do
-    case NostrEx.send_sub(filters, send_via: opts[:relays]) do
+  def handle_cast({:subscribe, %Subscription{} = sub, opts}, state) do
+    relay_targets = opts[:send_via] || opts[:relays]
+    case NostrEx.send_sub(sub, send_via: relay_targets) do
       {:ok, sub_id} ->
-        Logger.debug("Created subscription #{sub_id} with #{length(filters)} filters")
+        Logger.debug("Created subscription #{sub_id} with #{length(sub.filters)} filters")
         {:noreply, %{state | active_subscriptions: [sub_id | state.active_subscriptions]}}
       {:error, reason} ->
         Logger.error("Failed to create subscription: #{inspect(reason)}")

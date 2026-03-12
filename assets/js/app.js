@@ -97,6 +97,30 @@ Hooks.Copy = {
   },
 }
 
+Hooks.NoteCountUpdater = {
+  mounted() {
+    this.handleEvent("update_note_counts", ({note_id, counts}) => {
+      const noteEl = document.getElementById(`notes-${note_id}`)
+      if (!noteEl) return
+
+      const statsContainer = noteEl.querySelector(".interaction-stats")
+      if (!statsContainer) return
+
+      let html = ""
+      if (counts.reaction_count > 0) {
+        html += `<div class="flex items-center gap-1"><span>❤️</span><span>${counts.reaction_count}</span></div>`
+      }
+      if (counts.boost_count > 0) {
+        html += `<div class="flex items-center gap-1"><span>🔄</span><span>${counts.boost_count}</span></div>`
+      }
+      if (counts.zap_amount > 0) {
+        html += `<div class="flex items-center gap-1"><span class="text-yellow-400">⚡</span><span class="text-yellow-400">${counts.zap_amount} sats</span></div>`
+      }
+      statsContainer.innerHTML = html
+    })
+  }
+}
+
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},

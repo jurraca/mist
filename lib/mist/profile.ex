@@ -235,11 +235,9 @@ defmodule Mist.Profile do
   def get_user_relays(pubkey) do
     query =
       from ur in UserRelays,
-        join: p in Profile,
-        on: ur.pubkey_id == p.id,
         join: r in Mist.Relay.Relay,
         on: ur.relay_id == r.id,
-        where: p.pubkey == ^pubkey,
+        where: ur.pubkey == ^pubkey,
         select: %{relay: r.url, purpose: ur.purpose}
 
     Repo.all(query)
@@ -251,7 +249,7 @@ defmodule Mist.Profile do
   def fetch_profiles_without_relays do
     from(p in Profile,
       left_join: ur in Mist.Profile.UserRelays,
-      on: ur.pubkey_id == p.id,
+      on: ur.pubkey == p.pubkey,
       where: is_nil(ur.id) and is_nil(p.relay)
     )
     |> Repo.all()
