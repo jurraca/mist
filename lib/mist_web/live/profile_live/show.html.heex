@@ -8,9 +8,6 @@
   </:actions>
 </.header>
 
-<.list>
-</.list>
-
 <.back navigate={~p"/profiles"}>Back to profiles</.back>
 
 <.modal :if={@live_action == :edit} id="profile-modal" show on_cancel={JS.patch(~p"/profiles/#{@profile}")}>
