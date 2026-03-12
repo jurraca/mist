@@ -1,7 +1,7 @@
 defmodule MistWeb.SubscriptionLive.Index do
   use MistWeb, :live_view
 
-  alias Mist.Nostr.Dispatcher
+  alias Mist.Nostr.{Dispatcher, Event}
   alias NostrEx.RelayManager
 
   @impl true
@@ -57,16 +57,19 @@ defmodule MistWeb.SubscriptionLive.Index do
   end
 
   defp build_filters(assigns) do
-    base_filter = [] 
+    kinds = parse_kinds(assigns.kinds)
+    authors = parse_authors(assigns.authors)
+
+    base_filter = []
 
     base_filter =
-      case parse_kinds(assigns.kinds) do
+      case kinds do
         [] -> base_filter
         kinds -> Keyword.put(base_filter, :kinds, kinds)
       end
 
     base_filter =
-      case parse_authors(assigns.authors) do
+      case authors do
         [] -> base_filter
         authors -> Keyword.put(base_filter, :authors, authors)
       end
@@ -76,6 +79,13 @@ defmodule MistWeb.SubscriptionLive.Index do
         "" -> base_filter
         tag -> Keyword.put(base_filter, :"#t", [String.downcase(tag)])
       end
+
+    since = Event.since_for_filter(kinds: kinds, authors: authors)
+
+    base_filter =
+      base_filter
+      |> Keyword.put(:since, since)
+      |> Keyword.put(:limit, Event.default_limit())
 
     [base_filter]
   end

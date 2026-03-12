@@ -2,7 +2,7 @@ defmodule Mist.Nostr.Dispatcher do
   use GenServer
   require Logger
 
-  alias Mist.Nostr.EventHandler
+  alias Mist.Nostr.{Event, EventHandler}
   alias NostrEx.Subscription
 
   def start_link(_) do
@@ -19,14 +19,22 @@ defmodule Mist.Nostr.Dispatcher do
   end
 
   def subscribe_profiles(pubkeys, opts \\ []) when is_list(pubkeys) do
-    case Subscription.new(authors: pubkeys, kinds: [0, 10002]) do
+    kinds = [0, 10002]
+    since = Event.since_for_filter(kinds: kinds, authors: pubkeys)
+    limit = Event.default_limit()
+
+    case Subscription.new(authors: pubkeys, kinds: kinds, since: since, limit: limit) do
       {:ok, sub} -> subscribe(sub, opts)
       {:error, reason} -> Logger.error("Failed to create profile subscription: #{inspect(reason)}")
     end
   end
 
   def subscribe_follows(pubkey) when is_binary(pubkey) do
-    case Subscription.new(authors: [pubkey], kinds: [3]) do
+    kinds = [3]
+    since = Event.since_for_filter(kinds: kinds, authors: [pubkey])
+    limit = Event.default_limit()
+
+    case Subscription.new(authors: [pubkey], kinds: kinds, since: since, limit: limit) do
       {:ok, sub} -> subscribe(sub, [])
       {:error, reason} -> Logger.error("Failed to create follows subscription: #{inspect(reason)}")
     end

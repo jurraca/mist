@@ -1,7 +1,11 @@
 defmodule Mist.Nostr.Event do
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query
   alias Mist.Nostr.Tags
+
+  @default_since_window Application.compile_env(:mist, :subscription_since_window, 86_400)
+  @default_limit Application.compile_env(:mist, :subscription_limit, 500)
 
   schema "events" do
     field :event_id, :string
@@ -32,4 +36,31 @@ defmodule Mist.Nostr.Event do
     |> Map.put("event_id", event_id)
     |> Map.update!("content", fn content -> if(content == "", do: nil, else: content) end)
   end
+
+  def max_created_at(opts \\ []) do
+    kinds = Keyword.get(opts, :kinds, [])
+    authors = Keyword.get(opts, :authors, [])
+
+    query =
+      from(e in __MODULE__, select: max(e.created_at))
+      |> maybe_filter_kinds(kinds)
+      |> maybe_filter_authors(authors)
+
+    Mist.Repo.one(query)
+  end
+
+  def since_for_filter(opts \\ []) do
+    case max_created_at(opts) do
+      nil -> System.os_time(:second) - @default_since_window
+      ts -> ts
+    end
+  end
+
+  def default_limit, do: @default_limit
+
+  defp maybe_filter_kinds(query, []), do: query
+  defp maybe_filter_kinds(query, kinds), do: where(query, [e], e.kind in ^kinds)
+
+  defp maybe_filter_authors(query, []), do: query
+  defp maybe_filter_authors(query, authors), do: where(query, [e], e.pubkey in ^authors)
 end
