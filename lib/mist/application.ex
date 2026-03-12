@@ -18,6 +18,10 @@ defmodule Mist.Application do
       {Mist.Nostr.Signer, signing_method: :local},
       Mist.Nostr.Dispatcher,
       Mist.Nostr.Initializer,
+      # FindUserRelays runs on a timer; its first batch fires 5s after boot,
+      # which is intentionally after the Initializer has had time to populate
+      # the follow list so there are profiles to discover relays for.
+      Mist.Jobs.FindUserRelays,
       MistWeb.Endpoint
     ]
 

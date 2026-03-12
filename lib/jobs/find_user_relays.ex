@@ -1,7 +1,7 @@
 defmodule Mist.Jobs.FindUserRelays do
   use GenServer
   alias Mist.Profile
-  alias Mist.Nostr.EventHandler
+  alias Mist.Nostr.{Event, EventHandler}
   alias Mist.Relay
 
   require Logger
@@ -17,6 +17,7 @@ defmodule Mist.Jobs.FindUserRelays do
   @batch_size 50
   @subscription_timeout 30_000
   @max_events_per_subscription 200
+  @repeat_interval 30 * 60 * 1000
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -28,9 +29,9 @@ defmodule Mist.Jobs.FindUserRelays do
   end
 
   def handle_info(:run_discovery, state) do
-    spawn_link(fn -> run_discovery_batch() end)
+    Task.start(fn -> run_discovery_batch() end)
 
-    Process.send_after(self(), :run_discovery, 30 * 60 * 1000)
+    Process.send_after(self(), :run_discovery, @repeat_interval)
     {:noreply, state}
   end
 
@@ -44,7 +45,7 @@ defmodule Mist.Jobs.FindUserRelays do
   end
 
   def handle_cast(:run_now, state) do
-    spawn_link(fn -> run_discovery_batch() end)
+    Task.start(fn -> run_discovery_batch() end)
     {:noreply, state}
   end
 
@@ -57,38 +58,32 @@ defmodule Mist.Jobs.FindUserRelays do
       Logger.info("No profiles need relay discovery at this time")
     else
       Logger.info("Found #{length(profiles)} profiles for relay discovery")
-      search_relays(profiles, @directories, "directories")
-      remaining_profiles = get_remaining_profiles(profiles)
+      pubkeys = Enum.map(profiles, & &1.pubkey)
 
-      if not Enum.empty?(remaining_profiles) do
+      search_relays(pubkeys, @directories, "directories")
+      remaining_pubkeys = Profile.fetch_pubkeys_without_relays(pubkeys)
+
+      if not Enum.empty?(remaining_pubkeys) do
         Logger.info(
-          "#{length(remaining_profiles)} profiles still need relays, trying popular relays"
+          "#{length(remaining_pubkeys)} profiles still need relays, trying popular relays"
         )
 
-        search_relays(remaining_profiles, @popular_relays, "popular relays")
+        search_relays(remaining_pubkeys, @popular_relays, "popular relays")
       end
 
       update_check_timestamps(profiles)
     end
   end
 
-  defp get_remaining_profiles(original_profiles) do
-    pubkeys = Enum.map(original_profiles, & &1.pubkey)
-
-    Profile.fetch_profiles_without_relays()
-    |> Enum.filter(fn profile -> profile.pubkey in pubkeys end)
-  end
-
   defp search_relays([], _relay_list, relay_type) do
     Logger.info("No profiles to search for #{relay_type}")
   end
 
-  defp search_relays(profiles, relay_list, relay_type) do
-    Logger.info("Searching #{relay_type} for #{length(profiles)} profiles")
+  defp search_relays(pubkeys, relay_list, relay_type) do
+    Logger.info("Searching #{relay_type} for #{length(pubkeys)} profiles")
 
     case Relay.maybe_connect_relays(relay_list) do
       {:ok, connected_relays} ->
-        pubkeys = Enum.map(profiles, & &1.pubkey)
         subscribe_and_wait(pubkeys, connected_relays, relay_type)
 
       {:error, reason} ->
@@ -97,7 +92,8 @@ defmodule Mist.Jobs.FindUserRelays do
   end
 
   defp subscribe_and_wait(pubkeys, relay_list, relay_type) do
-    filter = [authors: pubkeys, kinds: @kinds]
+    since = Event.since_for_filter(kinds: @kinds, authors: pubkeys)
+    filter = [authors: pubkeys, kinds: @kinds, since: since]
 
     case NostrEx.send_sub(filter, send_via: relay_list) do
       {:ok, sub_id} ->
@@ -118,69 +114,68 @@ defmodule Mist.Jobs.FindUserRelays do
     current_time = System.monotonic_time(:millisecond)
     elapsed = current_time - start_time
 
-    if elapsed > @subscription_timeout do
-      Logger.info("Subscription to #{relay_type} timed out after #{elapsed}ms")
-      NostrEx.close_sub(sub_id)
-    end
+    cond do
+      elapsed > @subscription_timeout ->
+        Logger.info("Subscription to #{relay_type} timed out after #{elapsed}ms")
+        NostrEx.close_sub(sub_id)
 
-    if event_count >= @max_events_per_subscription do
-      Logger.info("Max events (#{@max_events_per_subscription}) reached for #{relay_type}")
-      NostrEx.close_sub(sub_id)
-    end
+      event_count >= @max_events_per_subscription ->
+        Logger.info("Max events (#{@max_events_per_subscription}) reached for #{relay_type}")
+        NostrEx.close_sub(sub_id)
 
-    receive do
-      {:event, ^sub_id, event} ->
-        case process_relay_event(event) do
-          :ok ->
-            new_event_count = event_count + 1
+      true ->
+        receive do
+          {:event, ^sub_id, event} ->
+            case process_relay_event(event) do
+              :ok ->
+                handle_events_loop(
+                  sub_id,
+                  relay_list,
+                  relay_type,
+                  event_count + 1,
+                  eose_count,
+                  start_time
+                )
 
-            handle_events_loop(
-              sub_id,
-              relay_list,
-              relay_type,
-              new_event_count,
-              eose_count,
-              start_time
-            )
+              :error ->
+                handle_events_loop(
+                  sub_id,
+                  relay_list,
+                  relay_type,
+                  event_count,
+                  eose_count,
+                  start_time
+                )
+            end
 
-          :error ->
-            handle_events_loop(
-              sub_id,
-              relay_list,
-              relay_type,
-              event_count,
-              eose_count,
-              start_time
-            )
+          {:eose, ^sub_id, relay_host} ->
+            Logger.debug("EOSE from #{relay_host} (#{event_count} events processed)")
+            new_eose_count = eose_count + 1
+
+            if new_eose_count >= length(relay_list) do
+              Logger.info(
+                "Finished subscription to #{relay_type} - received EOSE from all relays (#{event_count} events)"
+              )
+
+              NostrEx.close_sub(sub_id)
+            else
+              handle_events_loop(
+                sub_id,
+                relay_list,
+                relay_type,
+                event_count,
+                new_eose_count,
+                start_time
+              )
+            end
+
+          other ->
+            Logger.debug("Received unexpected message: #{inspect(other)}")
+            handle_events_loop(sub_id, relay_list, relay_type, event_count, eose_count, start_time)
+        after
+          5_000 ->
+            handle_events_loop(sub_id, relay_list, relay_type, event_count, eose_count, start_time)
         end
-
-      {:eose, ^sub_id, relay_host} ->
-        Logger.debug("EOSE from #{relay_host} (#{event_count} events processed)")
-        new_eose_count = eose_count + 1
-
-        if new_eose_count >= length(relay_list) do
-          Logger.info(
-            "Finished subscription to #{relay_type} - received EOSE from all relays (#{event_count} events)"
-          )
-
-          NostrEx.close_sub(sub_id)
-        else
-          handle_events_loop(
-            sub_id,
-            relay_list,
-            relay_type,
-            event_count,
-            new_eose_count,
-            start_time
-          )
-        end
-
-      other ->
-        Logger.debug("Received unexpected message: #{inspect(other)}")
-        handle_events_loop(sub_id, relay_list, relay_type, event_count, eose_count, start_time)
-    after
-      5_000 ->
-        handle_events_loop(sub_id, relay_list, relay_type, event_count, eose_count, start_time)
     end
   end
 

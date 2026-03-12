@@ -256,6 +256,19 @@ defmodule Mist.Profile do
   end
 
   @doc """
+  Returns pubkeys from the given list that still have no relay entries.
+  """
+  def fetch_pubkeys_without_relays(pubkeys) when is_list(pubkeys) do
+    from(p in Profile,
+      left_join: ur in Mist.Profile.UserRelays,
+      on: ur.pubkey == p.pubkey,
+      where: p.pubkey in ^pubkeys and is_nil(ur.id) and is_nil(p.relay),
+      select: p.pubkey
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Fetches profiles for relay discovery, prioritizing those never checked or checked long ago.
   """
   def fetch_profiles_for_relay_discovery(limit \\ 50) do
