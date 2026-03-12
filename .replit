@@ -37,3 +37,7 @@ args = "mix deps.get && mix phx.server"
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
