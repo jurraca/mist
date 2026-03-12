@@ -17,7 +17,7 @@ defmodule Mist.Application do
       {Phoenix.PubSub, name: Mist.PubSub},
       {Mist.Nostr.Signer, signing_method: :local},
       Mist.Nostr.Dispatcher,
-      # Mist.Nostr.Initializer,
+      Mist.Nostr.Initializer,
       MistWeb.Endpoint
     ]
 

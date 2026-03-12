@@ -11,6 +11,7 @@ config :mist,
   ecto_repos: [Mist.Repo],
   generators: [timestamp_type: :utc_datetime],
   private_key: System.get_env("NOSTR_PRIVKEY"),
+  bootstrap_relay: "wss://purplepag.es",
   signer: [
     mode: {:local} # or {:remote, "wss://your-bunker-url"}
   ]

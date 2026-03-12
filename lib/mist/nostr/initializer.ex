@@ -1,74 +1,135 @@
 defmodule Mist.Nostr.Initializer do
   @moduledoc """
-  Handles initialization tasks for the Nostr application.
+  Handles bootstrap initialization for the Nostr application.
+
+  On startup, waits for the signer to be ready (using OTP-idiomatic retries),
+  then connects to a configurable bootstrap relay and performs a one-shot fetch
+  of the user's own kind 0 (profile), kind 3 (follow list), and kind 10002
+  (relay metadata) events. The subscription is closed after EOSE or a timeout.
+
+  ## Configuration
+
+    config :mist, :bootstrap_relay, "wss://purplepag.es"
+
   """
 
   use GenServer
   require Logger
-  alias Mist.Profile
-  alias Mist.Nostr.Dispatcher
+
+  alias Mist.Nostr.EventHandler
+  alias Mist.Relay
+
+  @default_bootstrap_relay "wss://purplepag.es"
+  @bootstrap_kinds [0, 3, 10002]
+  @subscription_timeout 15_000
+  @retry_interval 200
+  @max_retries 50
 
   def start_link(_) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+    GenServer.start_link(__MODULE__, %{retries: 0}, name: __MODULE__)
   end
 
   @impl GenServer
   def init(state) do
-    {:ok, state, {:continue, :initialize}}
+    {:ok, state, {:continue, :check_signer}}
   end
 
   @impl GenServer
-  def handle_continue(:initialize, state) do
-    case wait_for_signer_ready() do
-      :ok ->
-        #setup_follows_subscription()
-        {:noreply, state}
-      :timeout ->
-        Logger.warning("Signer not ready after timeout, skipping follows subscription")
-        {:noreply, state}
-    end
+  def handle_continue(:check_signer, state) do
+    check_signer_and_bootstrap(state)
   end
 
-  @doc """
-  Sets up initial subscriptions for the user's follows.
-  Called during application startup after the signer is ready.
-  """
-  def setup_follows_subscription do
-    with {:ok, %Profile.Profile{} = my_profile} <- Profile.get_my_profile(),
-         write_relay_map when map_size(write_relay_map) > 0 <- Profile.get_write_relays_by_relay(my_profile.following) do
-
-      relay_urls = Map.keys(write_relay_map)
-      case Mist.Relay.maybe_connect_relays(relay_urls) do
-        {:ok, _} ->
-          Enum.each(write_relay_map, fn {relay_url, authors} ->
-            filters = [kinds: [0, 3, 10002], authors: authors]
-            Dispatcher.subscribe(filters, relays: [relay_url])
-            Logger.debug("Subscribed to #{relay_url} for #{length(authors)} authors")
-          end)
-
-        {:error, reason} ->
-          Logger.debug("Failed to connect to relays: #{inspect(reason)}")
-      end
-    else
-      {:error, _} ->
-        Logger.debug("No profile set, skipping follows subscription")
-      %{} ->
-        Logger.debug("No write relays found for follows")
-    end
+  @impl GenServer
+  def handle_info(:retry_init, state) do
+    check_signer_and_bootstrap(state)
   end
 
-  @doc """
-  Waits for the signer to be ready before proceeding with initialization.
-  """
-  def wait_for_signer_ready(attempts \\ 10) do
+  @impl GenServer
+  def handle_info(msg, state) do
+    Logger.debug("Initializer received unexpected message: #{inspect(msg)}")
+    {:noreply, state}
+  end
+
+  defp check_signer_and_bootstrap(%{retries: retries} = state) do
     case :persistent_term.get(:my_profile_pubkey, nil) do
-      nil when attempts > 0 ->
-        Process.sleep(100)
-        wait_for_signer_ready(attempts - 1)
+      nil when retries < @max_retries ->
+        Process.send_after(self(), :retry_init, @retry_interval)
+        {:noreply, %{state | retries: retries + 1}}
+
       nil ->
-        :timeout
-      _pubkey ->
-        :ok
+        Logger.warning(
+          "Initializer: signer not ready after #{retries} retries (#{retries * @retry_interval}ms), skipping bootstrap"
+        )
+        {:noreply, state}
+
+      pubkey ->
+        Logger.info("Initializer: signer ready, starting bootstrap fetch")
+        run_bootstrap(pubkey)
+        {:noreply, state}
     end
+  end
+
+  defp run_bootstrap(pubkey) do
+    relay_url = bootstrap_relay()
+    Logger.info("Initializer: connecting to bootstrap relay #{relay_url}")
+
+    case Relay.maybe_connect_relays([relay_url]) do
+      {:ok, _} ->
+        fetch_own_events(pubkey, relay_url)
+
+      {:error, reason} ->
+        Logger.warning("Initializer: failed to connect to bootstrap relay: #{inspect(reason)}")
+    end
+  end
+
+  defp fetch_own_events(pubkey, relay_url) do
+    filter = [authors: [pubkey], kinds: @bootstrap_kinds]
+
+    case NostrEx.send_sub(filter, send_via: [relay_url]) do
+      {:ok, sub_id} ->
+        Logger.info("Initializer: subscribed to #{relay_url} (sub_id: #{sub_id})")
+        event_count = receive_events_loop(sub_id, relay_url)
+        Logger.info("Initializer: bootstrap complete — processed #{event_count} events")
+
+      {:error, reason} ->
+        Logger.warning("Initializer: failed to subscribe on #{relay_url}: #{inspect(reason)}")
+    end
+  end
+
+  defp receive_events_loop(sub_id, relay_url) do
+    start_time = System.monotonic_time(:millisecond)
+    do_receive_loop(sub_id, relay_url, 0, start_time)
+  end
+
+  defp do_receive_loop(sub_id, relay_url, event_count, start_time) do
+    elapsed = System.monotonic_time(:millisecond) - start_time
+
+    if elapsed > @subscription_timeout do
+      Logger.warning("Initializer: bootstrap timed out after #{elapsed}ms, closing subscription")
+      NostrEx.close_sub(sub_id)
+      event_count
+    else
+      remaining = @subscription_timeout - elapsed
+
+      receive do
+        {:event, ^sub_id, event} ->
+          EventHandler.process_event(event)
+          do_receive_loop(sub_id, relay_url, event_count + 1, start_time)
+
+        {:eose, ^sub_id, _relay_host} ->
+          Logger.info("Initializer: EOSE received from #{relay_url}")
+          NostrEx.close_sub(sub_id)
+          event_count
+      after
+        remaining ->
+          Logger.warning("Initializer: no messages received within timeout, closing subscription")
+          NostrEx.close_sub(sub_id)
+          event_count
+      end
+    end
+  end
+
+  defp bootstrap_relay do
+    Application.get_env(:mist, :bootstrap_relay, @default_bootstrap_relay)
   end
 end
