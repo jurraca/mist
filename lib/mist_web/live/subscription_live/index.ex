@@ -1,7 +1,8 @@
 defmodule MistWeb.SubscriptionLive.Index do
   use MistWeb, :live_view
 
-  alias Mist.Nostr.{Dispatcher, Event}
+  alias Mist.Notes
+  alias Mist.Nostr.Dispatcher
   alias NostrEx.RelayManager
 
   @impl true
@@ -80,12 +81,12 @@ defmodule MistWeb.SubscriptionLive.Index do
         tag -> Keyword.put(base_filter, :"#t", [String.downcase(tag)])
       end
 
-    since = Event.since_for_filter(kinds: kinds, authors: authors)
+    since = Notes.since_for_filter(kinds: kinds, authors: authors)
 
     base_filter =
       base_filter
       |> Keyword.put(:since, since)
-      |> Keyword.put(:limit, Event.default_limit())
+      |> Keyword.put(:limit, Notes.default_limit())
 
     [base_filter]
   end

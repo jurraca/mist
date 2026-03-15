@@ -2,7 +2,8 @@ defmodule Mist.Nostr.Dispatcher do
   use GenServer
   require Logger
 
-  alias Mist.Nostr.{Event, EventHandler}
+  alias Mist.Notes
+  alias Mist.Nostr.EventHandler
   alias NostrEx.Subscription
 
   def start_link(_) do
@@ -28,8 +29,8 @@ defmodule Mist.Nostr.Dispatcher do
 
   def subscribe_profiles(pubkeys, opts \\ []) when is_list(pubkeys) do
     kinds = [0, 10002]
-    since = Event.since_for_filter(kinds: kinds, authors: pubkeys)
-    limit = Event.default_limit()
+    since = Notes.since_for_filter(kinds: kinds, authors: pubkeys)
+    limit = Notes.default_limit()
 
     case Subscription.new(authors: pubkeys, kinds: kinds, since: since, limit: limit) do
       {:ok, sub} -> subscribe(sub, opts)
@@ -39,8 +40,8 @@ defmodule Mist.Nostr.Dispatcher do
 
   def subscribe_follows(pubkey) when is_binary(pubkey) do
     kinds = [3]
-    since = Event.since_for_filter(kinds: kinds, authors: [pubkey])
-    limit = Event.default_limit()
+    since = Notes.since_for_filter(kinds: kinds, authors: [pubkey])
+    limit = Notes.default_limit()
 
     case Subscription.new(authors: [pubkey], kinds: kinds, since: since, limit: limit) do
       {:ok, sub} -> subscribe(sub, [])

@@ -1,7 +1,8 @@
 defmodule Mist.Jobs.FindUserRelays do
   use GenServer
   alias Mist.Profile
-  alias Mist.Nostr.{Event, EventHandler}
+  alias Mist.Notes
+  alias Mist.Nostr.EventHandler
   alias Mist.Relay
 
   require Logger
@@ -92,7 +93,7 @@ defmodule Mist.Jobs.FindUserRelays do
   end
 
   defp subscribe_and_wait(pubkeys, relay_list, relay_type) do
-    since = Event.since_for_filter(kinds: @kinds, authors: pubkeys)
+    since = Notes.since_for_filter(kinds: @kinds, authors: pubkeys)
     filter = [authors: pubkeys, kinds: @kinds, since: since]
 
     with {:ok, sub} <- NostrEx.create_sub(filter),

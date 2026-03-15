@@ -2,6 +2,7 @@ defmodule MistWeb.NoteLive.FormComponent do
   use MistWeb, :live_component
 
   alias Mist.Nostr.Event
+  alias Mist.Notes
 
   @impl true
   def render(assigns) do
@@ -54,7 +55,7 @@ defmodule MistWeb.NoteLive.FormComponent do
     changeset = Event.change_note(%Event{}, trimmed_params)
 
     if changeset.valid? do
-      case Event.publish(trimmed_params["content"]) do
+      case Notes.publish(trimmed_params["content"]) do
         {:ok, event_map, :no_relays} ->
           notify_parent({:saved, event_map})
 
