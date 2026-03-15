@@ -92,7 +92,13 @@ defmodule MistWeb.RelayLive.Index do
          |> put_flash(:info, "Connected to #{url}")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Could not connect: #{inspect(reason)}")}
+        relay_list = get_relay_states()
+        relay_map = Map.new(relay_list, &{&1.id, &1})
+
+        {:noreply,
+         socket
+         |> assign(:relays, relay_map)
+         |> put_flash(:error, "Could not connect: #{inspect(reason)}")}
     end
   end
 

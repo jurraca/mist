@@ -37,12 +37,6 @@ defmodule MistWeb.RelayLive.FormComponent do
      end)}
   end
 
-  @impl true
-  def handle_event("validate", %{"relay" => relay_params}, socket) do
-    changeset = Map.merge(socket.assigns.relay, relay_params)
-    {:noreply, assign(socket, form: to_form(changeset, action: :validate))}
-  end
-
   def handle_event("save", %{"url" => url}, socket) do
     case Relay.get_or_create_relay(url) do
       {:ok, _relay} ->
