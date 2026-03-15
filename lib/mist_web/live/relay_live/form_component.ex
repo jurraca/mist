@@ -37,6 +37,7 @@ defmodule MistWeb.RelayLive.FormComponent do
      end)}
   end
 
+  @impl true
   def handle_event("save", %{"url" => url}, socket) do
     case Relay.get_or_create_relay(url) do
       {:ok, _relay} ->

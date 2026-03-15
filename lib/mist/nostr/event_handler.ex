@@ -53,6 +53,9 @@ defmodule Mist.Nostr.EventHandler do
            on_conflict: :nothing,
            conflict_target: [:event_id]
          ) do
+      {:ok, %{id: id}} when not is_nil(id) ->
+        persist_e_tags(id, event.tags)
+
       {:ok, _} -> :ok
       {:error, changeset} ->
         Logger.debug("Failed to persist kind 1 event: #{inspect(changeset.errors)}")
@@ -106,6 +109,19 @@ defmodule Mist.Nostr.EventHandler do
     topic = "events:#{event.kind}"
     # write to a general events table
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
+  end
+
+  defp persist_e_tags(db_event_id, tags) do
+    e_tags =
+      tags
+      |> Enum.filter(fn tag -> tag.type == "e" end)
+      |> Enum.map(fn tag ->
+        %{event_id: db_event_id, key: tag.type, value: tag.data, rest: tag.info || []}
+      end)
+
+    if e_tags != [] do
+      Mist.Repo.insert_all("tags", e_tags, on_conflict: :nothing)
+    end
   end
 
   defp fetch_author_data(%{pubkey: pubkey} = event) do

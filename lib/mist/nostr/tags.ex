@@ -8,8 +8,6 @@ defmodule Mist.Nostr.Tags do
     field :key, :string
     field :value, :string
     field :rest, {:array, :string}
-
-    timestamps(type: :utc_datetime)
   end
 
   @doc false

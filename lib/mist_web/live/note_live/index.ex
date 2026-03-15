@@ -362,12 +362,17 @@ defmodule MistWeb.NoteLive.Index do
     |> order_by([e], desc: e.created_at)
     |> limit(50)
     |> Mist.Repo.all()
+    |> Mist.Repo.preload(:tags)
     |> Enum.map(fn event ->
       profile =
         case Profile.get_by_pubkey(event.pubkey) do
           {:ok, p} -> p
           {:error, :not_found} -> nil
         end
+
+      tags = Enum.map(event.tags, fn t ->
+        %{type: t.key, data: t.value, info: t.rest || []}
+      end)
 
       %{
         id: event.event_id,
@@ -376,7 +381,7 @@ defmodule MistWeb.NoteLive.Index do
         created_at: event.created_at,
         sig: event.sig,
         kind: event.kind,
-        tags: [],
+        tags: tags,
         author: if(profile, do: profile.name, else: nil),
         bot: if(profile, do: profile.bot, else: false),
         reaction_count: 0,
