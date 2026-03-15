@@ -30,7 +30,9 @@ defmodule Mist.Relay.Relay do
     |> unique_constraint([:url])
   end
 
-  def changeset(_relay, _attrs) do
-    {:error, "URL is a required attrs"}
+  def changeset(relay, _attrs) do
+    relay
+    |> change()
+    |> add_error(:url, "is a required attribute")
   end
 end

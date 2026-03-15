@@ -81,7 +81,7 @@ defmodule MistWeb.RelayLive.Index do
   defp get_relay_states() do
     RelayManager.get_states()
     |> Enum.map(fn state ->
-      case Relay.query_relay_info(state.url) do
+      case Relay.get_relay_if_fresh(state.url) do
         nil ->
           %Relay.Status{
             id: state.name,

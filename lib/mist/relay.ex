@@ -107,7 +107,7 @@ defmodule Mist.Relay do
     url = String.trim(url, "/")
     attrs = Map.merge(%{"url" => url}, attrs)
     case Repo.get_by(Relay, url: url) do
-      nil -> attrs |> Map.merge(%{"url" => url}) |> create_relay()
+      nil -> create_relay(attrs)
       relay -> update_relay(relay, attrs)
     end
   end
@@ -160,7 +160,7 @@ defmodule Mist.Relay do
   end
 
 
-  def query_relay_info(url) do
+  def get_relay_if_fresh(url) do
     one_hour_ago = DateTime.utc_now() |> DateTime.add(-3600)
     query = from r in Relay,
       where: r.url == ^url and r.updated_at > ^one_hour_ago

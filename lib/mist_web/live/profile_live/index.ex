@@ -107,10 +107,7 @@ defmodule MistWeb.ProfileLive.Index do
   defp search(%{pubkey: _pubkey} = data), do: {:ok, data}
 
   defp find_local_profile(pubkey) do
-    case Profile.get_by_pubkey(pubkey) do
-      nil -> {:error, :not_found}
-      profile -> {:ok, profile}
-    end
+    Profile.get_by_pubkey(pubkey)
   end
 
   @impl true

@@ -23,10 +23,13 @@ defmodule Mist.Nostr.EventHandler do
   end
 
   def process_event(%Event{kind: 10002, pubkey: pubkey, tags: tags} = _event) do
-    with {count, _} <- Profile.add_user_relays(pubkey, tags),
-         true <- count > 0 do
-      :ok
-    else
+    case Profile.add_user_relays(pubkey, tags) do
+      {:error, :profile_not_found} ->
+        Logger.debug("Profile not found for relay event: #{pubkey}")
+
+      {count, _} when count > 0 ->
+        :ok
+
       _ ->
         Logger.debug("No relay events processed for #{pubkey}")
     end
@@ -106,10 +109,14 @@ defmodule Mist.Nostr.EventHandler do
   end
 
   defp fetch_author_data(%{pubkey: pubkey} = event) do
-    profile = Profile.get_by_pubkey(pubkey)
+    profile =
+      case Profile.get_by_pubkey(pubkey) do
+        {:ok, p} -> p
+        {:error, :not_found} -> nil
+      end
+
     event_map = Map.from_struct(event)
     
-    # Add interaction counts to the event data
     counts = get_interaction_counts(event.id)
     
     case profile do

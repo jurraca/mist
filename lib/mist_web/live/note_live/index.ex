@@ -363,7 +363,11 @@ defmodule MistWeb.NoteLive.Index do
     |> limit(50)
     |> Mist.Repo.all()
     |> Enum.map(fn event ->
-      profile = Profile.get_by_pubkey(event.pubkey)
+      profile =
+        case Profile.get_by_pubkey(event.pubkey) do
+          {:ok, p} -> p
+          {:error, :not_found} -> nil
+        end
 
       %{
         id: event.event_id,

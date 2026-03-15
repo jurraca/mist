@@ -1,6 +1,6 @@
 defmodule Mist.Profile do
   @moduledoc """
-  The Nostr context.
+  The Profile context.
   """
 
   import Ecto.Query, warn: false
@@ -43,8 +43,10 @@ defmodule Mist.Profile do
   Get a single profile by its pubkey.
   """
   def get_by_pubkey(pubkey) do
-    Profile
-    |> Repo.get_by(pubkey: pubkey)
+    case Repo.get_by(Profile, pubkey: pubkey) do
+      nil -> {:error, :not_found}
+      profile -> {:ok, profile}
+    end
   end
 
   @doc """
@@ -165,26 +167,31 @@ defmodule Mist.Profile do
   end
 
   def add_user_relays(pubkey, user_relays) do
-    profile = get_by_pubkey(pubkey)
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    case get_by_pubkey(pubkey) do
+      {:error, :not_found} ->
+        {:error, :profile_not_found}
 
-    relay_attrs =
-      user_relays
-      |> Enum.map(fn tag ->
-        case UserRelays.parse_tag(tag) do
-          {:ok, parsed} ->
-            parsed
-            |> Map.put(:pubkey, profile.pubkey)
-            |> Map.put(:inserted_at, now)
-            |> Map.put(:updated_at, now)
+      {:ok, profile} ->
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-          _err ->
-            nil
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
+        relay_attrs =
+          user_relays
+          |> Enum.map(fn tag ->
+            case parse_tag(tag) do
+              {:ok, parsed} ->
+                parsed
+                |> Map.put(:pubkey, profile.pubkey)
+                |> Map.put(:inserted_at, now)
+                |> Map.put(:updated_at, now)
 
-    Repo.insert_all(UserRelays, relay_attrs, on_conflict: {:replace_all_except, [:id]})
+              _err ->
+                nil
+            end
+          end)
+          |> Enum.reject(&is_nil/1)
+
+        Repo.insert_all(UserRelays, relay_attrs, on_conflict: {:replace_all_except, [:id]})
+    end
   end
 
   def get_my_profile do
@@ -200,8 +207,8 @@ defmodule Mist.Profile do
 
   def get_or_create_profile(%{"pubkey" => pubkey} = attrs) do
     case get_by_pubkey(pubkey) do
-      nil -> create_profile(attrs)
-      profile -> {:ok, profile}
+      {:error, :not_found} -> create_profile(attrs)
+      {:ok, profile} -> {:ok, profile}
     end
   end
 
@@ -211,8 +218,8 @@ defmodule Mist.Profile do
 
   def create_or_update_profile(%{"pubkey" => pubkey} = attrs) do
     case get_by_pubkey(pubkey) do
-      nil -> create_profile(attrs)
-      profile -> update_profile(profile, attrs)
+      {:error, :not_found} -> create_profile(attrs)
+      {:ok, profile} -> update_profile(profile, attrs)
     end
   end
 
@@ -227,8 +234,8 @@ defmodule Mist.Profile do
       end
 
     case get_by_pubkey(pubkey) do
-      nil -> create_profile(attrs)
-      profile -> update_profile(profile, attrs)
+      {:error, :not_found} -> create_profile(attrs)
+      {:ok, profile} -> update_profile(profile, attrs)
     end
   end
 
@@ -288,7 +295,7 @@ defmodule Mist.Profile do
   """
   def update_relay_check_timestamp(pubkey) do
     from(p in Profile, where: p.pubkey == ^pubkey)
-    |> Repo.update_all(set: [relay_last_checked: DateTime.utc_now()])
+    |> Repo.update_all(set: [relay_last_checked: DateTime.utc_now() |> DateTime.truncate(:second)])
   end
 
   @doc """
@@ -333,10 +340,10 @@ defmodule Mist.Profile do
     alias Mist.Nostr.Signer
 
     case get_by_pubkey(profile_pubkey) do
-      nil ->
+      {:error, :not_found} ->
         {:error, :profile_not_found}
 
-      profile ->
+      {:ok, profile} ->
         public_follows = get_public_follows(profile.id)
 
         tags =
@@ -529,18 +536,31 @@ defmodule Mist.Profile do
   Get a follow list with its member count.
   """
   def get_list_with_count(list_id) do
-    list = Repo.get(FollowList, list_id)
+    query =
+      from fl in FollowList,
+        left_join: m in FollowListMembers,
+        on: m.follow_list_id == fl.id,
+        where: fl.id == ^list_id,
+        group_by: fl.id,
+        select: {fl, count(m.id)}
 
-    case list do
-      nil ->
-        {:error, :not_found}
-
-      list ->
-        count =
-          from(m in FollowListMembers, where: m.follow_list_id == ^list_id, select: count())
-          |> Repo.one()
-
-        {:ok, Map.put(list, :member_count, count)}
+    case Repo.one(query) do
+      nil -> {:error, :not_found}
+      {list, count} -> {:ok, Map.put(list, :member_count, count)}
     end
   end
+
+  defp parse_tag(%{data: relay_url, info: info}) do
+    {:ok, relay} = Mist.Relay.get_or_create_relay(relay_url)
+    purpose = translate_rw(info)
+    {:ok, %{relay_id: relay.id, purpose: purpose}}
+  end
+
+  defp parse_tag(_tag) do
+    {:error, "missing a required key in tag: data or info"}
+  end
+
+  defp translate_rw(["read"]), do: :r
+  defp translate_rw(["write"]), do: :w
+  defp translate_rw(_), do: :rw
 end
