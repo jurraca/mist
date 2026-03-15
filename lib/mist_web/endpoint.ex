@@ -8,7 +8,8 @@ defmodule MistWeb.Endpoint do
     store: :cookie,
     key: "_mist_key",
     signing_salt: "WOvxMofC",
-    same_site: "Lax"
+    same_site: "None",
+    secure: true
   ]
 
   socket "/live", Phoenix.LiveView.Socket,

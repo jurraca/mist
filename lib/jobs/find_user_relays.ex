@@ -93,7 +93,7 @@ defmodule Mist.Jobs.FindUserRelays do
   end
 
   defp subscribe_and_wait(pubkeys, relay_list, relay_type) do
-    since = Notes.since_for_filter(kinds: @kinds, authors: pubkeys)
+    since = Notes.since_for_filter(kinds: @kinds, authors: pubkeys) |> DateTime.from_unix!()
     filter = [authors: pubkeys, kinds: @kinds, since: since]
 
     with {:ok, sub} <- NostrEx.create_sub(filter),

@@ -3,7 +3,6 @@ modules = ["elixir", "nodejs-20"]
 [[ports]]
 localPort = 4000
 externalPort = 80
-exposeLocalhost = true
 
 [[ports]]
 localPort = 5000
@@ -33,7 +32,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "mix deps.get && mix phx.server"
+args = "mix deps.get && iex -S mix phx.server"
 
 [workflows.workflow.metadata]
 outputType = "webview"
