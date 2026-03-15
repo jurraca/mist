@@ -2,12 +2,14 @@ defmodule Mist.Profile.UserRelays do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias Mist.Relay.Relay
+  alias Mist.Profile.Profile
+  alias Mist.Relay.Info
 
   schema "user_relays" do
     field :purpose, Ecto.Enum, values: [:r, :w, :rw]
     field :pubkey, :string
-    belongs_to :relay, Relay
+    belongs_to :profile, Profile
+    belongs_to :relay, Info
 
     timestamps(type: :utc_datetime)
   end
@@ -15,7 +17,7 @@ defmodule Mist.Profile.UserRelays do
   @doc false
   def changeset(relay_metadata, attrs) do
     relay_metadata
-    |> cast(attrs, [:relay_id, :pubkey, :purpose, :inserted_at, :updated_at])
+    |> cast(attrs, [:relay_id, :pubkey, :profile_id, :purpose, :inserted_at, :updated_at])
     |> validate_required([:relay_id, :pubkey, :purpose])
     |> unique_constraint([:relay_id, :pubkey])
   end

@@ -90,7 +90,7 @@ defmodule MistWeb.RelayLive.Index do
             url: state.url
           }
 
-        %Relay.Relay{} = relay_info ->
+        %Relay.Info{} = relay_info ->
           %Relay.Status{
             id: state.name,
             relay_info: relay_info,

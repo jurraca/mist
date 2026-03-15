@@ -6,7 +6,7 @@ defmodule Mist.Relay do
   import Ecto.Query, warn: false
   alias Mist.Repo
 
-  alias Mist.Relay.Relay
+  alias Mist.Relay.Info
 
   @doc """
   Returns the list of relays.
@@ -14,11 +14,11 @@ defmodule Mist.Relay do
   ## Examples
 
       iex> list_relays()
-      [%Relay{}, ...]
+      [%Info{}, ...]
 
   """
   def list_relays do
-    Repo.all(Relay)
+    Repo.all(Info)
   end
 
   def maybe_connect_relays(relay_list) do
@@ -57,13 +57,13 @@ defmodule Mist.Relay do
   ## Examples
 
       iex> get_relay!(123)
-      %Relay{}
+      %Info{}
 
       iex> get_relay!(456)
       ** (Ecto.NoResultsError)
 
   """
-  def get_relay!(id), do: Repo.get!(Relay, id)
+  def get_relay!(id), do: Repo.get!(Info, id)
 
   @doc """
   Creates a relay.
@@ -71,15 +71,15 @@ defmodule Mist.Relay do
   ## Examples
 
       iex> create_relay(%{field: value})
-      {:ok, %Relay{}}
+      {:ok, %Info{}}
 
       iex> create_relay(%{field: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
   def create_relay(attrs \\ %{}) do
-    %Relay{}
-    |> Relay.changeset(attrs)
+    %Info{}
+    |> Info.changeset(attrs)
     |> Repo.insert()
   end
 
@@ -89,7 +89,7 @@ defmodule Mist.Relay do
   ## Examples
 
       iex> get_or_create_relay("wss://example.com", %{field: value})
-      {:ok, %Relay{}}
+      {:ok, %Info{}}
 
       iex> get_or_create_relay("wss://example.com", %{field: bad_value})
       {:error, %Ecto.Changeset{}}
@@ -97,7 +97,7 @@ defmodule Mist.Relay do
   """
   def get_or_create_relay(url, attrs \\ %{}) do
     url = String.trim(url, "/")
-    case Repo.get_by(Relay, url: url) do
+    case Repo.get_by(Info, url: url) do
       nil -> attrs |> Map.merge(%{"url" => url}) |> create_relay()
       relay -> {:ok, relay}
     end
@@ -106,7 +106,7 @@ defmodule Mist.Relay do
   def create_or_update_relay(url, attrs \\ %{}) do
     url = String.trim(url, "/")
     attrs = Map.merge(%{"url" => url}, attrs)
-    case Repo.get_by(Relay, url: url) do
+    case Repo.get_by(Info, url: url) do
       nil -> create_relay(attrs)
       relay -> update_relay(relay, attrs)
     end
@@ -118,15 +118,15 @@ defmodule Mist.Relay do
   ## Examples
 
       iex> update_relay(relay, %{field: new_value})
-      {:ok, %Relay{}}
+      {:ok, %Info{}}
 
       iex> update_relay(relay, %{field: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
-  def update_relay(%Relay{} = relay, attrs) do
+  def update_relay(%Info{} = relay, attrs) do
     relay
-    |> Relay.changeset(attrs)
+    |> Info.changeset(attrs)
     |> Repo.update()
   end
 
@@ -136,13 +136,13 @@ defmodule Mist.Relay do
   ## Examples
 
       iex> delete_relay(relay)
-      {:ok, %Relay{}}
+      {:ok, %Info{}}
 
       iex> delete_relay(relay)
       {:error, %Ecto.Changeset{}}
 
   """
-  def delete_relay(%Relay{} = relay) do
+  def delete_relay(%Info{} = relay) do
     Repo.delete(relay)
   end
 
@@ -152,17 +152,17 @@ defmodule Mist.Relay do
   ## Examples
 
       iex> change_relay(relay)
-      %Ecto.Changeset{data: %Relay{}}
+      %Ecto.Changeset{data: %Info{}}
 
   """
-  def change_relay(%Relay{} = relay, attrs \\ %{}) do
-    Relay.changeset(relay, attrs)
+  def change_relay(%Info{} = relay, attrs \\ %{}) do
+    Info.changeset(relay, attrs)
   end
 
 
   def get_relay_if_fresh(url) do
     one_hour_ago = DateTime.utc_now() |> DateTime.add(-3600)
-    query = from r in Relay,
+    query = from r in Info,
       where: r.url == ^url and r.updated_at > ^one_hour_ago
     Repo.one(query)
   end

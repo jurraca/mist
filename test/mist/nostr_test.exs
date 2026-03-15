@@ -43,7 +43,7 @@ defmodule Mist.NostrTest do
       relay = relay_fixture()
       update_attrs = %{name: "some updated name", version: "some updated version", description: "some updated description", banner: "some updated banner", icon: "some updated icon", pubkey: "some updated pubkey", contact: "some updated contact", supported_nips: [1], software: "some updated software"}
 
-      assert {:ok, %Relay.Relay{} = relay} = Relay.update_relay(relay, update_attrs)
+      assert {:ok, %Relay.Info{} = relay} = Relay.update_relay(relay, update_attrs)
       assert relay.name == "some updated name"
       assert relay.version == "some updated version"
       assert relay.description == "some updated description"
@@ -63,7 +63,7 @@ defmodule Mist.NostrTest do
 
     test "delete_relay/1 deletes the relay" do
       relay = relay_fixture()
-      assert {:ok, %Relay.Relay{}} = Relay.delete_relay(relay)
+      assert {:ok, %Relay.Info{}} = Relay.delete_relay(relay)
       assert_raise Ecto.NoResultsError, fn -> Nostr.get_relay!(relay.id) end
     end
 

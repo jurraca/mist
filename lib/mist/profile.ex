@@ -156,8 +156,10 @@ defmodule Mist.Profile do
 
       follow_list_attrs =
         Enum.map(followed_list, fn profile ->
+          follow_attrs = Map.get(profile, :_follow_attrs, %{})
           %{follower_id: follower.id,
             followed_id: profile.id,
+            petname: Map.get(follow_attrs, :petname),
             inserted_at: now,
             updated_at: now}
         end)
@@ -181,6 +183,7 @@ defmodule Mist.Profile do
               {:ok, parsed} ->
                 parsed
                 |> Map.put(:pubkey, profile.pubkey)
+                |> Map.put(:profile_id, profile.id)
                 |> Map.put(:inserted_at, now)
                 |> Map.put(:updated_at, now)
 
@@ -224,27 +227,33 @@ defmodule Mist.Profile do
   end
 
   def create_profile_from_tag(%Nostr.Tag{data: pubkey, info: info}) do
-    attrs = %{pubkey: pubkey}
-
-    attrs =
+    {profile_attrs, follow_attrs} =
       case info do
-        [relay, petname] -> Map.merge(attrs, %{relay: relay, petname: petname})
-        [relay] -> Map.put(attrs, :relay, relay)
-        _ -> attrs
+        [relay, petname] -> {%{pubkey: pubkey, relay: relay}, %{petname: petname}}
+        [relay] -> {%{pubkey: pubkey, relay: relay}, %{}}
+        _ -> {%{pubkey: pubkey}, %{}}
       end
 
-    case get_by_pubkey(pubkey) do
-      {:error, :not_found} -> create_profile(attrs)
-      {:ok, profile} -> update_profile(profile, attrs)
+    profile_result =
+      case get_by_pubkey(pubkey) do
+        {:error, :not_found} -> create_profile(profile_attrs)
+        {:ok, profile} -> update_profile(profile, profile_attrs)
+      end
+
+    case profile_result do
+      {:ok, profile} -> {:ok, Map.put(profile, :_follow_attrs, follow_attrs)}
+      error -> error
     end
   end
 
   def get_user_relays(pubkey) do
     query =
       from ur in UserRelays,
-        join: r in Mist.Relay.Relay,
+        join: p in Profile,
+        on: ur.profile_id == p.id,
+        join: r in Mist.Relay.Info,
         on: ur.relay_id == r.id,
-        where: ur.pubkey == ^pubkey,
+        where: p.pubkey == ^pubkey,
         select: %{relay: r.url, purpose: ur.purpose}
 
     Repo.all(query)
@@ -256,7 +265,7 @@ defmodule Mist.Profile do
   def fetch_profiles_without_relays do
     from(p in Profile,
       left_join: ur in Mist.Profile.UserRelays,
-      on: ur.pubkey == p.pubkey,
+      on: ur.profile_id == p.id,
       where: is_nil(ur.id) and is_nil(p.relay)
     )
     |> Repo.all()
@@ -268,7 +277,7 @@ defmodule Mist.Profile do
   def fetch_pubkeys_without_relays(pubkeys) when is_list(pubkeys) do
     from(p in Profile,
       left_join: ur in Mist.Profile.UserRelays,
-      on: ur.pubkey == p.pubkey,
+      on: ur.profile_id == p.id,
       where: p.pubkey in ^pubkeys and is_nil(ur.id) and is_nil(p.relay),
       select: p.pubkey
     )
@@ -307,8 +316,8 @@ defmodule Mist.Profile do
     query =
       from ur in Mist.Profile.UserRelays,
         join: p in Mist.Profile.Profile,
-        on: ur.pubkey == p.pubkey,
-        join: r in Mist.Relay.Relay,
+        on: ur.profile_id == p.id,
+        join: r in Mist.Relay.Info,
         on: ur.relay_id == r.id,
         where: p.pubkey in ^follow_pubkeys and ur.purpose in [:w, :rw],
         select: %{relay: r.url, pubkey: p.pubkey}
@@ -344,12 +353,12 @@ defmodule Mist.Profile do
         {:error, :profile_not_found}
 
       {:ok, profile} ->
-        public_follows = get_public_follows(profile.id)
+        public_follows = get_public_follows_with_petname(profile.id)
 
         tags =
-          Enum.map(public_follows, fn followed ->
+          Enum.map(public_follows, fn %{profile: followed, petname: petname} ->
             relay = followed.relay || ""
-            petname = followed.petname || followed.name || ""
+            petname = petname || followed.name || ""
             ["p", followed.pubkey, relay, petname]
           end)
 
@@ -385,6 +394,16 @@ defmodule Mist.Profile do
       on: f.followed_id == followed.id,
       where: f.follower_id == ^profile_id and f.is_public == true,
       select: followed
+    )
+    |> Repo.all()
+  end
+
+  def get_public_follows_with_petname(profile_id) do
+    from(f in Follows,
+      join: followed in Profile,
+      on: f.followed_id == followed.id,
+      where: f.follower_id == ^profile_id and f.is_public == true,
+      select: %{profile: followed, petname: f.petname}
     )
     |> Repo.all()
   end
