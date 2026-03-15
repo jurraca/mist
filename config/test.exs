@@ -17,6 +17,8 @@ config :mist, MistWeb.Endpoint,
   secret_key_base: "0qys+5Rn21pLDDdlfOPUq3yfv4DQAQHPQVtFBjmroD3wUBZrcZXsdfHGK04Yi8eS",
   server: false
 
+config :mist, skip_nostr_services: true
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

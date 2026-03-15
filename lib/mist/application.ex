@@ -10,20 +10,24 @@ defmodule Mist.Application do
     # Create ETS table for interaction counts with concurrency options
     :ets.new(:interaction_counts, [:named_table, :public, :set, {:write_concurrency, true}, {:read_concurrency, true}])
     
-    children = [
-      MistWeb.Telemetry,
-      Mist.Repo,
-      {DNSCluster, query: Application.get_env(:mist, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Mist.PubSub},
-      {Mist.Nostr.Signer, signing_method: :local},
-      Mist.Nostr.Dispatcher,
-      Mist.Nostr.Initializer,
-      # FindUserRelays runs on a timer; its first batch fires 5s after boot,
-      # which is intentionally after the Initializer has had time to populate
-      # the follow list so there are profiles to discover relays for.
-      Mist.Jobs.FindUserRelays,
-      MistWeb.Endpoint
-    ]
+    children =
+      [
+        MistWeb.Telemetry,
+        Mist.Repo,
+        {DNSCluster, query: Application.get_env(:mist, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: Mist.PubSub}
+      ] ++
+        if Application.get_env(:mist, :skip_nostr_services, false) do
+          []
+        else
+          [
+            {Mist.Nostr.Signer, signing_method: :local},
+            Mist.Nostr.Dispatcher,
+            Mist.Nostr.Initializer,
+            Mist.Jobs.FindUserRelays
+          ]
+        end ++
+        [MistWeb.Endpoint]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
