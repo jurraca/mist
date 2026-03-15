@@ -2,7 +2,7 @@ defmodule MistWeb.NoteLive.Index do
   use MistWeb, :live_view
 
   alias Mist.Nostr.{Dispatcher, Event}
-  alias Mist.{Relay, Profile}
+  alias Mist.Profile
 
   @impl true
   def mount(_params, _session, socket) do
@@ -11,7 +11,7 @@ defmodule MistWeb.NoteLive.Index do
       Phoenix.PubSub.subscribe(Mist.PubSub, "note_counts")
     end
 
-    relays = Relay.list_relays()
+    relays = NostrEx.list_relays()
 
     follow_lists =
       case Profile.get_my_profile() do

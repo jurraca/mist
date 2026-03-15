@@ -1,13 +1,15 @@
 defmodule MistWeb.RelayLive.FormComponent do
   use MistWeb, :live_component
 
+  alias Mist.Relay
+
   @impl true
   def render(assigns) do
     ~H"""
     <div>
       <.header>
         {@title}
-        <:subtitle>Use this form to manage relay records in your database.</:subtitle>
+        <:subtitle>Add a relay URL to your saved relays.</:subtitle>
       </.header>
 
       <.simple_form
@@ -42,20 +44,19 @@ defmodule MistWeb.RelayLive.FormComponent do
   end
 
   def handle_event("save", %{"url" => url}, socket) do
-    case NostrEx.connect(url) do
-      {:ok, _pid} ->
+    case Relay.get_or_create_relay(url) do
+      {:ok, _relay} ->
         notify_parent(:saved)
 
         {:noreply,
          socket
-         |> put_flash(:info, "Successfully connected to Relay!")
+         |> put_flash(:info, "Relay saved successfully.")
          |> push_patch(to: socket.assigns.patch)}
 
-      {:error, error} ->
-      {:reply,
-         %{error: error},
+      {:error, _changeset} ->
+        {:noreply,
          socket
-         |> put_flash(:error, "Relay not created: #{error}")
+         |> put_flash(:error, "Could not save relay.")
          |> push_patch(to: socket.assigns.patch)}
     end
   end

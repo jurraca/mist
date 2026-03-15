@@ -8,7 +8,8 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    relay_map = get_relay_states() |> Map.new(&{&1.id, &1})
+    relay_list = get_relay_states()
+    relay_map = Map.new(relay_list, &{&1.id, &1})
 
     socket =
       socket
@@ -55,8 +56,16 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def handle_info({MistWeb.RelayLive.FormComponent, :saved}, socket) do
-    relay_states = get_relay_states()
-    {:noreply, assign(socket, :relays, relay_states)}
+    relay_list = get_relay_states()
+    relay_map = Map.new(relay_list, &{&1.id, &1})
+
+    for {id, state} <- relay_map do
+      if is_nil(state.relay_info) do
+        send(self(), {:fetch_relay_info, {id, state}})
+      end
+    end
+
+    {:noreply, assign(socket, :relays, relay_map)}
   end
 
   defp apply_action(socket, :new, _params) do
@@ -71,33 +80,67 @@ defmodule MistWeb.RelayLive.Index do
   end
 
   @impl true
-  def handle_event("delete", %{"name" => name}, socket) do
-    RelayManager.disconnect(name)
+  def handle_event("connect", %{"url" => url}, socket) do
+    case NostrEx.connect(url) do
+      {:ok, _pid} ->
+        relay_list = get_relay_states()
+        relay_map = Map.new(relay_list, &{&1.id, &1})
 
-    relay_states = get_relay_states()
-    {:noreply, assign(socket, :relays, relay_states)}
+        {:noreply,
+         socket
+         |> assign(:relays, relay_map)
+         |> put_flash(:info, "Connected to #{url}")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not connect: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("disconnect", %{"url" => url}, socket) do
+    RelayManager.disconnect(url)
+
+    relay_list = get_relay_states()
+    relay_map = Map.new(relay_list, &{&1.id, &1})
+
+    {:noreply,
+     socket
+     |> assign(:relays, relay_map)
+     |> put_flash(:info, "Disconnected from #{url}")}
   end
 
   defp get_relay_states() do
-    RelayManager.get_states()
-    |> Enum.map(fn state ->
-      case Relay.get_relay_if_fresh(state.url) do
-        nil ->
-          %Relay.Status{
-            id: state.name,
-            relay_info: nil,
-            relay_name: state.name,
-            url: state.url
-          }
+    db_relays = Relay.list_relays()
+    connected_urls = NostrEx.list_relays() |> MapSet.new()
 
-        %Relay.Info{} = relay_info ->
-          %Relay.Status{
-            id: state.name,
-            relay_info: relay_info,
-            relay_name: state.name,
-            url: state.url
-          }
-      end
+    Enum.map(db_relays, fn relay ->
+      relay_info =
+        case Relay.get_relay_if_fresh(relay.url) do
+          nil -> nil
+          %Relay.Info{} = info -> info_to_display_map(info)
+        end
+
+      %Relay.Status{
+        id: "relay-#{relay.id}",
+        relay_info: relay_info,
+        relay_name: relay.name || relay.url,
+        url: relay.url,
+        connected?: MapSet.member?(connected_urls, relay.url)
+      }
     end)
+  end
+
+  defp info_to_display_map(%Relay.Info{} = info) do
+    %{
+      "name" => info.name,
+      "description" => info.description,
+      "version" => info.version,
+      "software" => info.software,
+      "supported_nips" => info.supported_nips,
+      "pubkey" => info.pubkey,
+      "contact" => info.contact
+    }
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Map.new()
   end
 end
