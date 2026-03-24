@@ -26,7 +26,7 @@ defmodule Mist.Nostr.Keys do
     cond do
       String.starts_with?(input, "npub") ->
         case Bechamel.decode(input) do
-          {:ok, {"npub", data, _}} ->
+          {:ok, "npub", data} ->
             {:ok, Base.encode16(data, case: :lower)}
 
           _ ->

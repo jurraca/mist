@@ -4,12 +4,12 @@ defmodule Mist.Nostr.NIP19 do
   """
 
   def parse(binary) when is_binary(binary) do
-    case ExBech32.decode(binary) do
-      {:ok, {"nprofile", data, _}} -> parse_nprofile(data)
-      {:ok, {"nevent", data, _}} -> parse_nevent(data)
-      {:ok, {"note", data, _}} -> parse_note(data)
-      {:ok, {"nrelay", data, _}} -> parse_nrelay(data)
-      {:ok, {"naddr", data, _}} -> parse_naddr(data)
+    case Bechamel.decode(binary) do
+      {:ok, "nprofile", data} -> parse_nprofile(data)
+      {:ok, "nevent", data} -> parse_nevent(data)
+      {:ok, "note", data} -> parse_note(data)
+      {:ok, "nrelay", data} -> parse_nrelay(data)
+      {:ok, "naddr", data} -> parse_naddr(data)
       _ -> {:error, "invalid NIP-19 entity"}
     end
   end
