@@ -20,10 +20,12 @@ defmodule MistWeb.NoteLive.Index do
       end
 
     stored_notes = load_stored_notes()
+    {initial_nodes, initial_links} = build_incremental_changes(stored_notes)
+    initial_graph = %{nodes: initial_nodes, links: initial_links}
 
     {:ok, socket
      |> stream(:notes, stored_notes)
-     |> assign(:graph_data, %{nodes: [], links: []})
+     |> assign(:graph_data, initial_graph)
      |> assign(:view_mode, :list)
      |> assign(:subscription_filter, :all)
      |> assign(:available_relays, relays)
