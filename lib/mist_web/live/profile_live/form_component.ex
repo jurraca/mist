@@ -39,12 +39,14 @@ defmodule MistWeb.ProfileLive.FormComponent do
   end
 
   @impl true
-  def handle_event("validate", %{"profile" => profile_params}, socket) do
+  def handle_event("validate", params, socket) do
+    profile_params = Map.get(params, "profile", %{})
     changeset = Profile.change_profile(socket.assigns.profile, profile_params)
     {:noreply, assign(socket, form: to_form(changeset, action: :validate))}
   end
 
-  def handle_event("save", %{"profile" => profile_params}, socket) do
+  def handle_event("save", params, socket) do
+    profile_params = Map.get(params, "profile", %{})
     save_profile(socket, socket.assigns.action, profile_params)
   end
 

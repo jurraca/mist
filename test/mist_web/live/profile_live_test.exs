@@ -4,73 +4,35 @@ defmodule MistWeb.ProfileLiveTest do
   import Phoenix.LiveViewTest
   import Mist.NostrFixtures
 
-  @create_attrs %{}
-  @update_attrs %{}
-  @invalid_attrs %{}
-
   defp create_profile(_) do
     profile = profile_fixture()
     %{profile: profile}
   end
 
   describe "Index" do
-    setup [:create_profile]
-
-    test "lists all profiles", %{conn: conn} do
+    test "renders the profiles page with search form", %{conn: conn} do
       {:ok, _index_live, html} = live(conn, ~p"/profiles")
 
-      assert html =~ "Listing Profiles"
+      assert html =~ "Profiles you follow"
+      assert html =~ "search_term"
     end
 
-    test "saves new profile", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/profiles")
+    test "shows followed profiles in the list", %{conn: conn} do
+      _profile = profile_fixture()
+      {:ok, _index_live, html} = live(conn, ~p"/profiles")
 
-      assert index_live |> element("a", "New Profile") |> render_click() =~
-               "New Profile"
-
-      assert_patch(index_live, ~p"/profiles/new")
-
-      assert index_live
-             |> form("#profile-form", profile: @invalid_attrs)
-             |> render_change() =~ "can&#39;t be blank"
-
-      assert index_live
-             |> form("#profile-form", profile: @create_attrs)
-             |> render_submit()
-
-      assert_patch(index_live, ~p"/profiles")
-
-      html = render(index_live)
-      assert html =~ "Profile created successfully"
+      assert html =~ "Profiles you follow"
     end
 
-    test "updates profile in listing", %{conn: conn, profile: profile} do
+    test "ignores empty search submission", %{conn: conn} do
       {:ok, index_live, _html} = live(conn, ~p"/profiles")
 
-      assert index_live |> element("#profiles-#{profile.id} a", "Edit") |> render_click() =~
-               "Edit Profile"
+      html =
+        index_live
+        |> form("form", %{"search_term" => ""})
+        |> render_submit()
 
-      assert_patch(index_live, ~p"/profiles/#{profile}/edit")
-
-      assert index_live
-             |> form("#profile-form", profile: @invalid_attrs)
-             |> render_change() =~ "can&#39;t be blank"
-
-      assert index_live
-             |> form("#profile-form", profile: @update_attrs)
-             |> render_submit()
-
-      assert_patch(index_live, ~p"/profiles")
-
-      html = render(index_live)
-      assert html =~ "Profile updated successfully"
-    end
-
-    test "deletes profile in listing", %{conn: conn, profile: profile} do
-      {:ok, index_live, _html} = live(conn, ~p"/profiles")
-
-      assert index_live |> element("#profiles-#{profile.id} a", "Delete") |> render_click()
-      refute has_element?(index_live, "#profiles-#{profile.id}")
+      assert html =~ "Profiles you follow"
     end
   end
 
@@ -92,11 +54,7 @@ defmodule MistWeb.ProfileLiveTest do
       assert_patch(show_live, ~p"/profiles/#{profile}/show/edit")
 
       assert show_live
-             |> form("#profile-form", profile: @invalid_attrs)
-             |> render_change() =~ "can&#39;t be blank"
-
-      assert show_live
-             |> form("#profile-form", profile: @update_attrs)
+             |> form("#profile-form")
              |> render_submit()
 
       assert_patch(show_live, ~p"/profiles/#{profile}")

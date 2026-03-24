@@ -81,7 +81,6 @@ defmodule MistWeb.ProfileLive.Index do
 
   @impl true
   def handle_info(%Profile.Profile{} = profile, socket) do
-    dbg("Profile Liveview RECVD kind 0")
     {:noreply, stream_insert(socket, :profiles, profile)}
   end
 
