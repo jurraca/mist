@@ -261,6 +261,19 @@ tr:hover {
   color: var(--text-muted);
 }
 
+/* Relay card accordion */
+.relay-details {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.relay-details.open {
+  max-height: 500px;
+  opacity: 1;
+}
+
 /* Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
