@@ -99,6 +99,26 @@ defmodule MistWeb.RelayLive.Index do
      |> put_flash(:info, "Disconnected from #{url}")}
   end
 
+  @impl true
+  def handle_event("delete", %{"url" => url}, socket) do
+    case Relay.get_or_create_relay(url) do
+      {:ok, relay} ->
+        if MapSet.member?(MapSet.new(NostrEx.list_relays()), url) do
+          RelayManager.disconnect(url)
+        end
+
+        Relay.delete_relay(relay)
+
+        {:noreply,
+         socket
+         |> refresh_relay_assigns()
+         |> put_flash(:info, "Removed #{url}")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not find relay")}
+    end
+  end
+
   defp refresh_relay_assigns(socket) do
     relay_list = get_relay_states()
     relay_map = Map.new(relay_list, &{&1.id, &1})

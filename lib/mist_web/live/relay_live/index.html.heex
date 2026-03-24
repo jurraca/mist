@@ -31,7 +31,7 @@
               <% end %>
             </button>
           </div>
-          <div class="flex-shrink-0">
+          <div class="flex items-center gap-3 flex-shrink-0">
             <%= if relay.connected? do %>
               <.link
                 phx-click={JS.push("disconnect", value: %{url: relay.url})}
@@ -48,6 +48,13 @@
                 Connect
               </.link>
             <% end %>
+            <.link
+              phx-click={JS.push("delete", value: %{url: relay.url})}
+              data-confirm="Remove this relay?"
+              class="text-sm text-gray-500 hover:text-red-500 transition-colors whitespace-nowrap"
+            >
+              Remove
+            </.link>
           </div>
         </div>
         
