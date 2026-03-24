@@ -3,55 +3,45 @@ defmodule Mist.RelayTest do
 
   alias Mist.Relay
   alias Mist.Relay.Info, as: RelaySchema
+  alias Mist.Relay.Metadata
 
   import Mist.NostrFixtures
+  import Ecto.Query
 
   describe "CRUD" do
     test "list_relays/0 returns all relays" do
       relay = relay_fixture()
-      assert Relay.list_relays() == [relay]
+      [listed] = Relay.list_relays()
+      assert listed.id == relay.id
+      assert listed.url == relay.url
     end
 
     test "get_relay!/1 returns the relay with given id" do
       relay = relay_fixture()
-      assert Relay.get_relay!(relay.id) == relay
+      found = Relay.get_relay!(relay.id)
+      assert found.id == relay.id
+      assert found.url == relay.url
     end
 
     test "create_relay/1 with valid data creates a relay" do
-      attrs = %{
-        "url" => "wss://relay.example.com",
-        "version" => "1.0",
-        "description" => "A test relay",
-        "contact" => "admin@example.com",
-        "supported_nips" => [1, 2],
-        "software" => "test-software"
-      }
+      attrs = %{"url" => "wss://relay.example.com"}
 
       assert {:ok, %RelaySchema{} = relay} = Relay.create_relay(attrs)
       assert relay.url == "wss://relay.example.com"
-      assert relay.version == "1.0"
-      assert relay.description == "A test relay"
-      assert relay.contact == "admin@example.com"
-      assert relay.supported_nips == [1, 2]
-      assert relay.software == "test-software"
     end
 
-    test "create_relay/1 without url raises" do
-      assert_raise FunctionClauseError, fn -> Relay.create_relay(%{name: "no url"}) end
+    test "create_relay/1 without url returns error changeset" do
+      assert {:error, changeset} = Relay.create_relay(%{"name" => "no url"})
+      assert %{url: _} = errors_on(changeset)
     end
 
     test "update_relay/2 with valid data updates the relay" do
       relay = relay_fixture()
 
-      update_attrs = %{
-        "url" => "wss://updated.example.com",
-        "version" => "2.0",
-        "description" => "updated"
-      }
+      update_attrs = %{"url" => "wss://updated.example.com"}
 
       assert {:ok, %RelaySchema{} = updated} = Relay.update_relay(relay, update_attrs)
-      assert updated.version == "2.0"
-      assert updated.description == "updated"
+      assert updated.url == "wss://updated.example.com"
     end
 
     test "delete_relay/1 deletes the relay" do
@@ -104,21 +94,23 @@ defmodule Mist.RelayTest do
   end
 
   describe "create_or_update_relay/2" do
-    test "creates when relay does not exist" do
-      assert {:ok, relay} = Relay.create_or_update_relay("wss://brand-new.example.com", %{"description" => "new"})
-      assert relay.description == "new"
+    test "creates relay and metadata when relay does not exist" do
+      assert {:ok, %RelaySchema{} = relay} =
+               Relay.create_or_update_relay("wss://brand-new.example.com", %{"description" => "new"})
+
+      assert relay.metadata.description == "new"
     end
 
-    test "updates when relay already exists" do
+    test "updates metadata when relay already exists" do
       {:ok, _} = Relay.create_or_update_relay("wss://existing.example.com", %{"description" => "old"})
       {:ok, updated} = Relay.create_or_update_relay("wss://existing.example.com", %{"description" => "updated"})
-      assert updated.description == "updated"
+      assert updated.metadata.description == "updated"
     end
   end
 
   describe "get_relay_if_fresh/1" do
-    test "returns relay when updated recently" do
-      relay = relay_fixture(%{"url" => "wss://fresh.example.com"})
+    test "returns relay when metadata was updated recently" do
+      {:ok, _} = Relay.create_or_update_relay("wss://fresh.example.com", %{"description" => "fresh"})
       assert %RelaySchema{} = Relay.get_relay_if_fresh("wss://fresh.example.com")
     end
 
@@ -126,15 +118,20 @@ defmodule Mist.RelayTest do
       assert is_nil(Relay.get_relay_if_fresh("wss://nonexistent.example.com"))
     end
 
-    test "returns nil when relay is stale" do
-      relay = relay_fixture(%{"url" => "wss://stale.example.com"})
+    test "returns nil when metadata is stale" do
+      {:ok, relay} = Relay.create_or_update_relay("wss://stale.example.com", %{"description" => "stale"})
 
       two_hours_ago = DateTime.utc_now() |> DateTime.add(-7200) |> DateTime.truncate(:second)
 
-      from(r in RelaySchema, where: r.id == ^relay.id)
+      from(m in Metadata, where: m.relay_id == ^relay.id)
       |> Repo.update_all(set: [updated_at: two_hours_ago])
 
       assert is_nil(Relay.get_relay_if_fresh("wss://stale.example.com"))
+    end
+
+    test "returns nil when relay has no metadata" do
+      {:ok, _relay} = Relay.create_relay(%{"url" => "wss://no-meta.example.com"})
+      assert is_nil(Relay.get_relay_if_fresh("wss://no-meta.example.com"))
     end
   end
 end

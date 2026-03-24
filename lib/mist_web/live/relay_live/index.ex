@@ -4,6 +4,7 @@ defmodule MistWeb.RelayLive.Index do
   require Logger
 
   alias Mist.Relay
+  alias Mist.Relay.Metadata
   alias NostrEx.RelayManager
 
   @impl true
@@ -26,7 +27,7 @@ defmodule MistWeb.RelayLive.Index do
     lv_pid = self()
 
     Task.Supervisor.start_child(Mist.TaskSupervisor, fn ->
-      result = Relay.Info.get(state.url)
+      result = Metadata.get(state.url)
       send(lv_pid, {:relay_info_result, id, state, result})
     end)
 
@@ -138,14 +139,16 @@ defmodule MistWeb.RelayLive.Index do
 
     Enum.map(db_relays, fn relay ->
       relay_info =
-        case Relay.get_relay_if_fresh(relay.url) do
+        case relay.metadata do
           nil -> nil
-          %Relay.Info{} = info -> info_to_display_map(info)
+          %Metadata{} = meta -> info_to_display_map(meta)
         end
+
+      needs_fetch = is_nil(relay.metadata) || stale_metadata?(relay.metadata)
 
       %Relay.Status{
         id: "relay-#{relay.id}",
-        relay_info: relay_info,
+        relay_info: if(needs_fetch, do: nil, else: relay_info),
         relay_name: relay.name || relay.url,
         url: relay.url,
         connected?: MapSet.member?(connected_urls, relay.url)
@@ -153,15 +156,20 @@ defmodule MistWeb.RelayLive.Index do
     end)
   end
 
-  defp info_to_display_map(%Relay.Info{} = info) do
+  defp stale_metadata?(%Metadata{updated_at: updated_at}) do
+    one_hour_ago = DateTime.utc_now() |> DateTime.add(-3600)
+    DateTime.compare(updated_at, one_hour_ago) == :lt
+  end
+
+  defp info_to_display_map(%Metadata{} = meta) do
     %{
-      "name" => info.name,
-      "description" => info.description,
-      "version" => info.version,
-      "software" => info.software,
-      "supported_nips" => info.supported_nips,
-      "pubkey" => info.pubkey,
-      "contact" => info.contact
+      "name" => meta.name,
+      "description" => meta.description,
+      "version" => meta.version,
+      "software" => meta.software,
+      "supported_nips" => meta.supported_nips,
+      "pubkey" => meta.pubkey,
+      "contact" => meta.contact
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)
     |> Map.new()

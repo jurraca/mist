@@ -7,9 +7,10 @@ defmodule Mist.Relay do
   alias Mist.Repo
 
   alias Mist.Relay.Info
+  alias Mist.Relay.Metadata
 
   @doc """
-  Returns the list of relays.
+  Returns the list of relays with preloaded metadata.
 
   ## Examples
 
@@ -18,7 +19,7 @@ defmodule Mist.Relay do
 
   """
   def list_relays do
-    Repo.all(Info)
+    Repo.all(Info) |> Repo.preload(:metadata)
   end
 
   def maybe_connect_relays(relay_list) do
@@ -105,10 +106,33 @@ defmodule Mist.Relay do
 
   def create_or_update_relay(url, attrs \\ %{}) do
     url = String.trim(url, "/")
-    attrs = Map.merge(%{"url" => url}, attrs)
-    case Repo.get_by(Info, url: url) do
-      nil -> create_relay(attrs)
-      relay -> update_relay(relay, attrs)
+    case get_or_create_relay(url) do
+      {:ok, relay} ->
+        case upsert_metadata(relay, attrs) do
+          {:ok, _metadata} -> {:ok, Repo.preload(relay, :metadata, force: true)}
+          error -> error
+        end
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Gets or creates the relay_metadata row for the given relay.
+  """
+  def get_or_create_metadata(%Info{} = relay, attrs \\ %{}) do
+    attrs = Map.merge(attrs, %{"relay_id" => relay.id})
+    case Repo.get_by(Metadata, relay_id: relay.id) do
+      nil ->
+        %Metadata{}
+        |> Metadata.changeset(attrs)
+        |> Repo.insert()
+
+      metadata ->
+        metadata
+        |> Metadata.changeset(attrs)
+        |> Repo.update()
     end
   end
 
@@ -159,11 +183,31 @@ defmodule Mist.Relay do
     Info.changeset(relay, attrs)
   end
 
-
   def get_relay_if_fresh(url) do
     one_hour_ago = DateTime.utc_now() |> DateTime.add(-3600)
-    query = from r in Info,
-      where: r.url == ^url and r.updated_at > ^one_hour_ago
+    query =
+      from r in Info,
+        join: m in Metadata,
+        on: m.relay_id == r.id,
+        where: r.url == ^url and m.updated_at > ^one_hour_ago,
+        preload: [metadata: m]
+
     Repo.one(query)
+  end
+
+  defp upsert_metadata(%Info{} = relay, attrs) do
+    metadata_attrs = Map.merge(attrs, %{"relay_id" => relay.id})
+
+    case Repo.get_by(Metadata, relay_id: relay.id) do
+      nil ->
+        %Metadata{}
+        |> Metadata.changeset(metadata_attrs)
+        |> Repo.insert()
+
+      metadata ->
+        metadata
+        |> Metadata.changeset(metadata_attrs)
+        |> Repo.update()
+    end
   end
 end

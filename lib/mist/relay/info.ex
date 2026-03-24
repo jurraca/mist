@@ -5,14 +5,8 @@ defmodule Mist.Relay.Info do
   schema "relays" do
     field :name, :string
     field :url, :string
-    field :version, :string
-    field :description, :string
-    field :banner, :string
-    field :icon, :string
-    field :pubkey, :string
-    field :contact, :string
-    field :supported_nips, {:array, :integer}
-    field :software, :string
+
+    has_one :metadata, Mist.Relay.Metadata, foreign_key: :relay_id
 
     timestamps(type: :utc_datetime)
   end
@@ -32,20 +26,8 @@ defmodule Mist.Relay.Info do
       end
 
     relay
-    |> cast(attrs, [:name, :url, :description, :banner, :icon, :pubkey, :contact, :supported_nips, :software, :version])
+    |> cast(attrs, [:name, :url])
     |> validate_required([:url])
     |> unique_constraint([:url])
-  end
-
-  def get("wss" <> rest), do: get("https" <> rest)
-
-  def get("ws" <> rest), do: get("http" <> rest)
-
-  def get(url) do
-    header = %{"accept" => "application/nostr+json"}
-    case Req.get(url, headers: header, receive_timeout: 5_000) do
-      {:ok, resp} -> {:ok, resp.body}
-      err -> err
-    end
   end
 end

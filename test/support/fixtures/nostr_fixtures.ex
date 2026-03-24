@@ -19,19 +19,7 @@ defmodule Mist.NostrFixtures do
   def relay_fixture(attrs \\ %{}) do
     url = Map.get(attrs, :url, Map.get(attrs, "url", "wss://relay.example.com"))
 
-    merged =
-      attrs
-      |> Map.drop([:url])
-      |> Enum.into(%{
-        "url" => url,
-        "description" => "some description",
-        "contact" => "some contact",
-        "software" => "some software",
-        "supported_nips" => [1, 2],
-        "version" => "some version"
-      })
-
-    {:ok, relay} = Mist.Relay.create_relay(merged)
+    {:ok, relay} = Mist.Relay.create_relay(%{"url" => url})
     relay
   end
 
