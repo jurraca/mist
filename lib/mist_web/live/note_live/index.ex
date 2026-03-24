@@ -74,7 +74,7 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   @impl true
-  def handle_info(%{} = note_data, socket) do
+  def handle_info(%{id: _, pubkey: _, content: _} = note_data, socket) do
     new_socket = socket
     |> stream_insert(:notes, note_data, at: 0)
     |> queue_graph_update(note_data)
