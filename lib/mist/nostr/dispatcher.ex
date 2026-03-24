@@ -63,6 +63,11 @@ defmodule Mist.Nostr.Dispatcher do
         subs = Map.put(state.active_subscriptions, sub.id, sub.id)
         {:noreply, %{state | active_subscriptions: subs}}
 
+      {:ok, _sub_id} ->
+        Logger.debug("Created subscription #{sub.id}")
+        subs = Map.put(state.active_subscriptions, sub.id, sub.id)
+        {:noreply, %{state | active_subscriptions: subs}}
+
       {:error, reason} ->
         Logger.error("Failed to create subscription: #{inspect(reason)}")
         {:noreply, state}
@@ -76,6 +81,11 @@ defmodule Mist.Nostr.Dispatcher do
 
     case NostrEx.send_sub(sub, send_opts) do
       :ok ->
+        Logger.debug("Created named subscription #{name} -> #{sub.id}")
+        subs = Map.put(state.active_subscriptions, name, sub.id)
+        {:noreply, %{state | active_subscriptions: subs}}
+
+      {:ok, _sub_id} ->
         Logger.debug("Created named subscription #{name} -> #{sub.id}")
         subs = Map.put(state.active_subscriptions, name, sub.id)
         {:noreply, %{state | active_subscriptions: subs}}
