@@ -286,6 +286,16 @@ tr:hover {
   animation: pulse 2s infinite;
 }
 
+select.phx-change-loading {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+input.phx-change-loading {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }

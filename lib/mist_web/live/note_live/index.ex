@@ -28,10 +28,7 @@ defmodule MistWeb.NoteLive.Index do
           {[], []}
       end
 
-    stored_notes =
-      if follow_pubkeys != [],
-        do: Notes.list_recent_by_pubkeys(follow_pubkeys),
-        else: Notes.list_recent()
+    stored_notes = Notes.list_recent_by_pubkeys(follow_pubkeys)
 
     initial_graph = GraphUpdater.from_notes(stored_notes)
 
@@ -49,6 +46,7 @@ defmodule MistWeb.NoteLive.Index do
       |> assign(:selected_list, nil)
       |> assign(:pending_graph_updates, [])
       |> assign(:batch_timer_ref, nil)
+      |> assign(:notes_empty_message, empty_state_message(%{subscription_filter: :following, follow_pubkeys: follow_pubkeys, hashtag_filter: "", selected_relay: nil}, stored_notes))
 
     socket =
       if connected?(socket) do
@@ -219,6 +217,29 @@ defmodule MistWeb.NoteLive.Index do
     |> stream(:notes, notes)
     |> assign(:graph_data, graph)
     |> push_event("graph_reset", graph)
+    |> assign(:notes_empty_message, empty_state_message(socket.assigns, notes))
+  end
+
+  defp empty_state_message(_assigns, notes) when notes != [], do: nil
+  defp empty_state_message(assigns, []) do
+    case assigns.subscription_filter do
+      :following when assigns.follow_pubkeys == [] ->
+        "You're not following anyone yet. Visit your profile to add follows."
+      :following ->
+        "No recent notes from your follows."
+      :hashtag when assigns.hashtag_filter in ["", nil] ->
+        "Enter a hashtag above to search."
+      :hashtag ->
+        "No notes found for ##{assigns.hashtag_filter}."
+      {:list, _} ->
+        "No recent notes from this list."
+      :single_relay when assigns.selected_relay in [nil, ""] ->
+        "Select a relay from the dropdown above."
+      :single_relay ->
+        "No recent notes on #{assigns.selected_relay}."
+      _ ->
+        "No notes found."
+    end
   end
 
   defp maybe_flash_no_relays(:no_relays, socket) do

@@ -98,10 +98,14 @@
     <div
       :if={@view_mode == :graph}
       id="graph-container"
-      class="bg-dark-secondary border border-dark-border rounded-lg"
+      class="bg-dark-secondary border border-dark-border rounded-lg min-h-[800px] overflow-auto"
       phx-hook="NetworkGraph"
       data-graph={Jason.encode!(@graph_data)}
     >
+    </div>
+
+    <div :if={@notes_empty_message && @view_mode == :list} class="text-center py-16 text-text-muted">
+      <p class="text-sm">{@notes_empty_message}</p>
     </div>
 
     <div :if={@view_mode == :list} id="notes" phx-update="stream" phx-hook="NoteCountUpdater" class="space-y-4">
