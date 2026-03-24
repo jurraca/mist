@@ -41,19 +41,12 @@ Hooks.NetworkGraph = {
     this.handleEvent("graph_count_update", ({note_id, counts}) => {
       this.graph.updateNodeCounts(note_id, counts)
     })
-  },
 
-  updated() {
-    // Only do full render if the graph was reset (nodes count decreased or went to zero)
-    // This indicates a filter change, not just new data
-    const graphData = JSON.parse(this.el.dataset.graph)
-    const currentNodeCount = graphData.nodes.length
-    
-    if (currentNodeCount < this.lastNodeCount || currentNodeCount === 0) {
-      // Filter changed - do full render
-      this.updateGraph()
-    }
-    // Otherwise rely on incremental push_events
+    // Listen for filter resets from the server
+    this.handleEvent("graph_reset", ({nodes, links}) => {
+      this.graph.render({nodes, links})
+      this.lastNodeCount = nodes.length
+    })
   },
 
   updateGraph() {

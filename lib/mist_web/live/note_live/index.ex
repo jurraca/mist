@@ -218,6 +218,7 @@ defmodule MistWeb.NoteLive.Index do
     socket
     |> stream(:notes, notes)
     |> assign(:graph_data, graph)
+    |> push_event("graph_reset", graph)
   end
 
   defp maybe_flash_no_relays(:no_relays, socket) do
