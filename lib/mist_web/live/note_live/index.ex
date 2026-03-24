@@ -106,6 +106,7 @@ defmodule MistWeb.NoteLive.Index do
     {:noreply, stream_insert(socket, :notes, note, at: 0)}
   end
 
+  @impl true
   def handle_info(_, socket), do: {:noreply, socket}
 
   @impl true
