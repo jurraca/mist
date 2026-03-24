@@ -8,19 +8,10 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    relay_list = get_relay_states()
-    relay_map = Map.new(relay_list, &{&1.id, &1})
-
     socket =
       socket
-      |> assign(:relays, relay_map)
       |> assign(:page_title, "My Relays")
-
-    for {id, state} <- relay_map do
-      if is_nil(state.relay_info) do
-        send(self(), {:fetch_relay_info, {id, state}})
-      end
-    end
+      |> refresh_relay_assigns()
 
     {:ok, socket}
   end
@@ -67,22 +58,13 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def handle_info({MistWeb.RelayLive.FormComponent, :saved}, socket) do
-    relay_list = get_relay_states()
-    relay_map = Map.new(relay_list, &{&1.id, &1})
-
-    for {id, state} <- relay_map do
-      if is_nil(state.relay_info) do
-        send(self(), {:fetch_relay_info, {id, state}})
-      end
-    end
-
-    {:noreply, assign(socket, :relays, relay_map)}
+    {:noreply, refresh_relay_assigns(socket)}
   end
 
   defp apply_action(socket, :new, _params) do
     socket
     |> assign(:page_title, "New Relay")
-    |> assign(:relay, %Relay.Status{})
+    |> assign(:relay, %{})
     |> assign(:live_action, :new)
   end
 
@@ -94,21 +76,15 @@ defmodule MistWeb.RelayLive.Index do
   def handle_event("connect", %{"url" => url}, socket) do
     case NostrEx.connect(url) do
       {:ok, _pid} ->
-        relay_list = get_relay_states()
-        relay_map = Map.new(relay_list, &{&1.id, &1})
-
         {:noreply,
          socket
-         |> assign(:relays, relay_map)
+         |> refresh_relay_assigns()
          |> put_flash(:info, "Connected to #{url}")}
 
       {:error, reason} ->
-        relay_list = get_relay_states()
-        relay_map = Map.new(relay_list, &{&1.id, &1})
-
         {:noreply,
          socket
-         |> assign(:relays, relay_map)
+         |> refresh_relay_assigns()
          |> put_flash(:error, "Could not connect: #{inspect(reason)}")}
     end
   end
@@ -117,13 +93,23 @@ defmodule MistWeb.RelayLive.Index do
   def handle_event("disconnect", %{"url" => url}, socket) do
     RelayManager.disconnect(url)
 
+    {:noreply,
+     socket
+     |> refresh_relay_assigns()
+     |> put_flash(:info, "Disconnected from #{url}")}
+  end
+
+  defp refresh_relay_assigns(socket) do
     relay_list = get_relay_states()
     relay_map = Map.new(relay_list, &{&1.id, &1})
 
-    {:noreply,
-     socket
-     |> assign(:relays, relay_map)
-     |> put_flash(:info, "Disconnected from #{url}")}
+    for {id, state} <- relay_map do
+      if is_nil(state.relay_info) do
+        send(self(), {:fetch_relay_info, {id, state}})
+      end
+    end
+
+    assign(socket, :relays, relay_map)
   end
 
   defp get_relay_states() do
