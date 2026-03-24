@@ -4,6 +4,7 @@ defmodule MistWeb.NoteLive.Index do
   alias Mist.Nostr.{Dispatcher, Event}
   alias Mist.Notes
   alias Mist.Profile
+  alias MistWeb.NoteLive.GraphUpdater
 
   @impl true
   def mount(_params, _session, socket) do
@@ -28,8 +29,7 @@ defmodule MistWeb.NoteLive.Index do
       end
 
     stored_notes = Notes.list_recent()
-    {initial_nodes, initial_links} = build_incremental_changes(stored_notes)
-    initial_graph = %{nodes: initial_nodes, links: initial_links}
+    initial_graph = GraphUpdater.from_notes(stored_notes)
 
     {:ok, socket
      |> stream(:notes, stored_notes)
@@ -251,11 +251,9 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   defp queue_graph_update(socket, note) do
-    # Add note to pending updates
-    pending = [note | socket.assigns.pending_graph_updates]
+    pending = GraphUpdater.queue(socket.assigns.pending_graph_updates, note)
     socket = assign(socket, :pending_graph_updates, pending)
-    
-    # Schedule batch processing if not already scheduled
+
     if socket.assigns.batch_timer_ref == nil do
       timer_ref = Process.send_after(self(), :process_graph_batch, 250)
       assign(socket, :batch_timer_ref, timer_ref)
@@ -266,97 +264,26 @@ defmodule MistWeb.NoteLive.Index do
 
   defp process_batched_graph_updates(socket) do
     pending = socket.assigns.pending_graph_updates
-    
+
     if pending == [] do
       socket
     else
-      current_graph = socket.assigns.graph_data
-      existing_node_ids = MapSet.new(current_graph.nodes, & &1.id)
-      
-      # Deduplicate against existing graph nodes and within pending batch
-      unique_notes = 
-        pending
-        |> Enum.reverse()
-        |> Enum.uniq_by(& &1.id)
-        |> Enum.reject(fn note -> MapSet.member?(existing_node_ids, note.id) end)
-      
-      # Build incremental changes (only truly new nodes/links)
-      {new_nodes, new_links} = build_incremental_changes(unique_notes)
-      
-      # Deduplicate links against existing links
-      existing_link_keys = MapSet.new(current_graph.links, fn link ->
-        {link.source, link.target}
-      end)
-      
-      unique_new_links = Enum.reject(new_links, fn link ->
-        MapSet.member?(existing_link_keys, {link.source, link.target})
-      end)
-      
-      # Update graph data
-      updated_graph = %{
-        nodes: new_nodes ++ current_graph.nodes,
-        links: unique_new_links ++ current_graph.links
-      }
-      
-      # Push incremental update to JS hook
+      {updated_graph, new_nodes, new_links} =
+        GraphUpdater.flush(socket.assigns.graph_data, pending)
+
       socket
       |> assign(:graph_data, updated_graph)
-      |> push_event("graph_update", %{nodes: new_nodes, links: unique_new_links})
+      |> push_event("graph_update", %{nodes: new_nodes, links: new_links})
       |> assign(:pending_graph_updates, [])
     end
   end
 
-  defp build_incremental_changes(notes) do
-    nodes = Enum.map(notes, fn note ->
-      %{
-        id: note.id,
-        pubkey: note.pubkey,
-        content: String.slice(note.content, 0, 50) <> "...",
-        type: "note",
-        created_at: note.created_at,
-        reaction_count: Map.get(note, :reaction_count, 0),
-        boost_count: Map.get(note, :boost_count, 0),
-        zap_amount: Map.get(note, :zap_amount, 0)
-      }
-    end)
-    
-    links = notes
-    |> Enum.flat_map(&extract_reply_links/1)
-    
-    {nodes, links}
-  end
-
   defp update_node_counts(socket, note_id, counts) do
-    current_graph = socket.assigns.graph_data
-    
-    updated_nodes = 
-      current_graph.nodes
-      |> Enum.map(fn node ->
-        if node.id == note_id do
-          Map.merge(node, counts)
-        else
-          node
-        end
-      end)
-    
-    updated_graph = %{current_graph | nodes: updated_nodes}
-    
-    # Push count update to JS hook
+    updated_graph = GraphUpdater.update_counts(socket.assigns.graph_data, note_id, counts)
+
     socket
     |> assign(:graph_data, updated_graph)
     |> push_event("graph_count_update", %{note_id: note_id, counts: counts})
-  end
-
-  defp extract_reply_links(note) do
-    note.tags
-    |> Enum.filter(fn tag -> tag.type == "e" end)
-    |> Enum.map(fn %{data: referenced_note_id, info: _rest} ->
-      %{
-        source: referenced_note_id,
-        target: note.id,
-        type: "reply"
-      }
-    end)
   end
 
 end
