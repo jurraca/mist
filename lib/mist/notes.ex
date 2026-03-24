@@ -2,6 +2,7 @@ defmodule Mist.Notes do
   import Ecto.Query
 
   alias Mist.Nostr.Event
+  alias Mist.Profile.Profile
 
   @default_since_window Application.compile_env(:mist, :subscription_since_window, 86_400)
   @default_limit Application.compile_env(:mist, :subscription_limit, 500)
@@ -57,6 +58,51 @@ defmodule Mist.Notes do
   end
 
   def default_limit, do: @default_limit
+
+  @doc """
+  Returns the 50 most recent notes (kind 1 events), with author profiles batch-loaded.
+  """
+  def list_recent do
+    events =
+      from(e in Event,
+        where: e.kind == 1,
+        order_by: [desc: e.created_at],
+        limit: 50
+      )
+      |> Mist.Repo.all()
+      |> Mist.Repo.preload(:tags)
+
+    pubkeys = Enum.map(events, & &1.pubkey) |> Enum.uniq()
+
+    profile_map =
+      from(p in Profile, where: p.pubkey in ^pubkeys)
+      |> Mist.Repo.all()
+      |> Map.new(fn p -> {p.pubkey, p} end)
+
+    Enum.map(events, fn event ->
+      profile = Map.get(profile_map, event.pubkey)
+
+      tags =
+        Enum.map(event.tags, fn t ->
+          %{type: t.key, data: t.value, info: t.rest || []}
+        end)
+
+      %{
+        id: event.event_id,
+        pubkey: event.pubkey,
+        content: event.content,
+        created_at: event.created_at,
+        sig: event.sig,
+        kind: event.kind,
+        tags: tags,
+        author: if(profile, do: profile.name, else: nil),
+        bot: if(profile, do: profile.bot, else: false),
+        reaction_count: 0,
+        boost_count: 0,
+        zap_amount: 0
+      }
+    end)
+  end
 
   defp maybe_filter_kinds(query, []), do: query
   defp maybe_filter_kinds(query, kinds), do: where(query, [e], e.kind in ^kinds)

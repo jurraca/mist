@@ -2,6 +2,7 @@ defmodule MistWeb.NoteLive.Index do
   use MistWeb, :live_view
 
   alias Mist.Nostr.{Dispatcher, Event}
+  alias Mist.Notes
   alias Mist.Profile
 
   @impl true
@@ -13,13 +14,20 @@ defmodule MistWeb.NoteLive.Index do
 
     relays = NostrEx.list_relays()
 
-    follow_lists =
+    {follow_lists, follow_pubkeys} =
       case Profile.get_my_profile() do
-        {:ok, profile} -> Profile.get_follow_lists(profile.id)
-        _ -> []
+        {:ok, profile} ->
+          lists = Profile.get_follow_lists(profile.id)
+          pubkeys =
+            Profile.get_follows_with_privacy(profile.id)
+            |> Enum.map(& &1.profile.pubkey)
+          {lists, pubkeys}
+
+        _ ->
+          {[], []}
       end
 
-    stored_notes = load_stored_notes()
+    stored_notes = Notes.list_recent()
     {initial_nodes, initial_links} = build_incremental_changes(stored_notes)
     initial_graph = %{nodes: initial_nodes, links: initial_links}
 
@@ -32,6 +40,7 @@ defmodule MistWeb.NoteLive.Index do
      |> assign(:selected_relay, nil)
      |> assign(:hashtag_filter, "")
      |> assign(:follow_lists, follow_lists)
+     |> assign(:follow_pubkeys, follow_pubkeys)
      |> assign(:selected_list, nil)
      |> assign(:pending_graph_updates, [])
      |> assign(:batch_timer_ref, nil)}
@@ -201,21 +210,8 @@ defmodule MistWeb.NoteLive.Index do
         {:ok, %{filters: [kinds: [1]]}}
 
       :following ->
-        case Profile.get_my_profile() do
-          {:ok, profile} ->
-            pubkeys =
-              Profile.get_follows_with_privacy(profile.id)
-              |> Enum.map(fn f -> f.profile.pubkey end)
-
-            if pubkeys == [] do
-              :skip
-            else
-              {:ok, %{filters: [kinds: [1], authors: pubkeys]}}
-            end
-
-          _ ->
-            :skip
-        end
+        pubkeys = assigns.follow_pubkeys
+        if pubkeys == [], do: :skip, else: {:ok, %{filters: [kinds: [1], authors: pubkeys]}}
 
       :single_relay ->
         relay = assigns.selected_relay
@@ -363,40 +359,4 @@ defmodule MistWeb.NoteLive.Index do
     end)
   end
 
-  defp load_stored_notes do
-    import Ecto.Query
-
-    Mist.Nostr.Event
-    |> where([e], e.kind == 1)
-    |> order_by([e], desc: e.created_at)
-    |> limit(50)
-    |> Mist.Repo.all()
-    |> Mist.Repo.preload(:tags)
-    |> Enum.map(fn event ->
-      profile =
-        case Profile.get_by_pubkey(event.pubkey) do
-          {:ok, p} -> p
-          {:error, :not_found} -> nil
-        end
-
-      tags = Enum.map(event.tags, fn t ->
-        %{type: t.key, data: t.value, info: t.rest || []}
-      end)
-
-      %{
-        id: event.event_id,
-        pubkey: event.pubkey,
-        content: event.content,
-        created_at: event.created_at,
-        sig: event.sig,
-        kind: event.kind,
-        tags: tags,
-        author: if(profile, do: profile.name, else: nil),
-        bot: if(profile, do: profile.bot, else: false),
-        reaction_count: 0,
-        boost_count: 0,
-        zap_amount: 0
-      }
-    end)
-  end
 end
