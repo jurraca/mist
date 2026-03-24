@@ -18,7 +18,7 @@
           >
             <option value="all" selected={@subscription_filter == :all}>All Relays</option>
             <option value="single_relay" selected={@subscription_filter == :single_relay}>Single Relay</option>
-            <option value="follows" selected={@subscription_filter == :follows}>Following</option>
+            <option value="following" selected={@subscription_filter == :following}>Following</option>
             <optgroup :if={length(@follow_lists) > 0} label="Custom Lists">
               <option
                 :for={list <- @follow_lists}

@@ -117,7 +117,14 @@ defmodule MistWeb.NoteLive.Index do
         {:noreply, socket}
 
       true ->
-        filter_atom = String.to_atom(filter)
+        filter_atom =
+          case filter do
+            "all"          -> :all
+            "following"    -> :following
+            "single_relay" -> :single_relay
+            "hashtag"      -> :hashtag
+            _              -> :all
+          end
 
         socket =
           socket
