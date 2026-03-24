@@ -22,7 +22,7 @@ defmodule Mist.Notes do
         true ->
           case NostrEx.send_event(signed) do
             {:error, reason} -> {:ok, signed, {:error, reason}}
-            _ -> 
+            _ ->
              EventHandler.process_event(signed)
              {:ok, signed}
           end
@@ -60,18 +60,57 @@ defmodule Mist.Notes do
   def default_limit, do: @default_limit
 
   @doc """
-  Returns the 50 most recent notes (kind 1 events), with author profiles batch-loaded.
+  Returns the 50 most recent kind-1 notes, with author profiles batch-loaded.
   """
   def list_recent do
-    events =
-      from(e in Event,
-        where: e.kind == 1,
-        order_by: [desc: e.created_at],
-        limit: 50
-      )
-      |> Mist.Repo.all()
-      |> Mist.Repo.preload(:tags)
+    from(e in Event,
+      where: e.kind == 1,
+      order_by: [desc: e.created_at],
+      limit: 50
+    )
+    |> Mist.Repo.all()
+    |> Mist.Repo.preload(:tags)
+    |> assemble_notes()
+  end
 
+  @doc """
+  Returns the 50 most recent kind-1 notes authored by the given pubkeys.
+  Returns [] immediately when pubkeys is empty.
+  """
+  def list_recent_by_pubkeys([]), do: []
+  def list_recent_by_pubkeys(pubkeys) do
+    from(e in Event,
+      where: e.kind == 1 and e.pubkey in ^pubkeys,
+      order_by: [desc: e.created_at],
+      limit: 50
+    )
+    |> Mist.Repo.all()
+    |> Mist.Repo.preload(:tags)
+    |> assemble_notes()
+  end
+
+  @doc """
+  Returns the 50 most recent kind-1 notes tagged with the given hashtag.
+  Returns [] immediately when tag is blank.
+  """
+  def list_recent_by_hashtag(""), do: []
+  def list_recent_by_hashtag(tag) do
+    clean = tag |> String.trim() |> String.downcase() |> String.replace(~r/^#/, "")
+
+    from(e in Event,
+      join: t in assoc(e, :tags),
+      where: e.kind == 1 and t.key == "t" and t.value == ^clean,
+      order_by: [desc: e.created_at],
+      limit: 100
+    )
+    |> Mist.Repo.all()
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.take(50)
+    |> Mist.Repo.preload(:tags)
+    |> assemble_notes()
+  end
+
+  defp assemble_notes(events) do
     pubkeys = Enum.map(events, & &1.pubkey) |> Enum.uniq()
 
     profile_map =

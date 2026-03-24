@@ -28,22 +28,36 @@ defmodule MistWeb.NoteLive.Index do
           {[], []}
       end
 
-    stored_notes = Notes.list_recent()
+    stored_notes =
+      if follow_pubkeys != [],
+        do: Notes.list_recent_by_pubkeys(follow_pubkeys),
+        else: Notes.list_recent()
+
     initial_graph = GraphUpdater.from_notes(stored_notes)
 
-    {:ok, socket
-     |> stream(:notes, stored_notes)
-     |> assign(:graph_data, initial_graph)
-     |> assign(:view_mode, :list)
-     |> assign(:subscription_filter, :all)
-     |> assign(:available_relays, relays)
-     |> assign(:selected_relay, nil)
-     |> assign(:hashtag_filter, "")
-     |> assign(:follow_lists, follow_lists)
-     |> assign(:follow_pubkeys, follow_pubkeys)
-     |> assign(:selected_list, nil)
-     |> assign(:pending_graph_updates, [])
-     |> assign(:batch_timer_ref, nil)}
+    socket =
+      socket
+      |> stream(:notes, stored_notes)
+      |> assign(:graph_data, initial_graph)
+      |> assign(:view_mode, :list)
+      |> assign(:subscription_filter, :following)
+      |> assign(:available_relays, relays)
+      |> assign(:selected_relay, nil)
+      |> assign(:hashtag_filter, "")
+      |> assign(:follow_lists, follow_lists)
+      |> assign(:follow_pubkeys, follow_pubkeys)
+      |> assign(:selected_list, nil)
+      |> assign(:pending_graph_updates, [])
+      |> assign(:batch_timer_ref, nil)
+
+    socket =
+      if connected?(socket) do
+        maybe_flash_no_relays(apply_subscription(socket), socket)
+      else
+        socket
+      end
+
+    {:ok, socket}
   end
 
   @impl true
@@ -65,11 +79,10 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def handle_info(%{note_id: note_id, counts: counts}, socket) do
-    # Handle count updates by updating both graph data and stream
     new_socket = socket
     |> update_node_counts(note_id, counts)
     |> update_stream_counts(note_id, counts)
-    
+
     {:noreply, new_socket}
   end
 
@@ -106,7 +119,13 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def handle_event("toggle_view", %{"mode" => mode}, socket) do
-    {:noreply, assign(socket, :view_mode, String.to_atom(mode))}
+    view_mode =
+      case mode do
+        "list"  -> :list
+        "graph" -> :graph
+        _       -> :list
+      end
+    {:noreply, assign(socket, :view_mode, view_mode)}
   end
 
   @impl true
@@ -121,6 +140,7 @@ defmodule MistWeb.NoteLive.Index do
           |> assign(:subscription_filter, {:list, list_id})
           |> assign(:selected_list, list_id)
           |> clear_ui_state()
+          |> reload_notes_for_filter()
 
         socket = maybe_flash_no_relays(apply_subscription(socket), socket)
         {:noreply, socket}
@@ -140,6 +160,7 @@ defmodule MistWeb.NoteLive.Index do
           |> assign(:subscription_filter, filter_atom)
           |> assign(:selected_list, nil)
           |> clear_ui_state()
+          |> reload_notes_for_filter()
 
         socket = maybe_flash_no_relays(apply_subscription(socket), socket)
         {:noreply, socket}
@@ -152,6 +173,7 @@ defmodule MistWeb.NoteLive.Index do
       socket
       |> assign(:selected_relay, relay_url)
       |> clear_ui_state()
+      |> reload_notes_for_filter()
 
     socket = maybe_flash_no_relays(apply_subscription(socket), socket)
     {:noreply, socket}
@@ -163,6 +185,7 @@ defmodule MistWeb.NoteLive.Index do
       socket
       |> assign(:hashtag_filter, hashtag)
       |> clear_ui_state()
+      |> reload_notes_for_filter()
 
     socket = maybe_flash_no_relays(apply_subscription(socket), socket)
     {:noreply, socket}
@@ -178,6 +201,22 @@ defmodule MistWeb.NoteLive.Index do
     |> assign(:graph_data, %{nodes: [], links: []})
     |> assign(:pending_graph_updates, [])
     |> assign(:batch_timer_ref, nil)
+  end
+
+  defp reload_notes_for_filter(socket) do
+    notes =
+      case socket.assigns.subscription_filter do
+        :following    -> Notes.list_recent_by_pubkeys(socket.assigns.follow_pubkeys)
+        {:list, id}   -> Notes.list_recent_by_pubkeys(Profile.get_pubkeys_in_list(id))
+        :hashtag      -> Notes.list_recent_by_hashtag(socket.assigns.hashtag_filter)
+        _             -> Notes.list_recent()
+      end
+
+    graph = GraphUpdater.from_notes(notes)
+
+    socket
+    |> stream(:notes, notes)
+    |> assign(:graph_data, graph)
   end
 
   defp maybe_flash_no_relays(:no_relays, socket) do
