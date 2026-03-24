@@ -285,5 +285,4 @@ defmodule MistWeb.NoteLive.Index do
     |> assign(:graph_data, updated_graph)
     |> push_event("graph_count_update", %{note_id: note_id, counts: counts})
   end
-
 end
