@@ -1,4 +1,8 @@
 defmodule MistWeb.NoteLive.GraphUpdater do
+  @moduledoc """
+  Create and update the graph data.
+  """
+
   def new(), do: %{nodes: [], links: []}
 
   def from_notes(notes) do
@@ -10,8 +14,10 @@ defmodule MistWeb.NoteLive.GraphUpdater do
 
   def flush(graph, pending) do
     existing_ids = MapSet.new(graph.nodes, & &1.id)
-    unique = pending |> Enum.reverse() |> Enum.uniq_by(& &1.id)
-             |> Enum.reject(&MapSet.member?(existing_ids, &1.id))
+    unique = pending
+      |> Enum.reverse()
+      |> Enum.uniq_by(& &1.id)
+      |> Enum.reject(&MapSet.member?(existing_ids, &1.id))
     {new_nodes, new_links} = build_changes(unique)
     existing_link_keys = MapSet.new(graph.links, &{&1.source, &1.target})
     unique_links = Enum.reject(new_links, &MapSet.member?(existing_link_keys, {&1.source, &1.target}))
