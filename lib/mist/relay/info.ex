@@ -18,20 +18,23 @@ defmodule Mist.Relay.Info do
   end
 
   @doc false
-  def changeset(relay, %{"url" => url} = attrs) do
-    uri = URI.parse(url)
-    name = uri.host
-    url = URI.to_string(uri) |> String.trim("/")
-    attrs = attrs |> Map.put("url", url) |> Map.put("name", name)
+  def changeset(relay, attrs) do
+    attrs =
+      case attrs do
+        %{"url" => url} when is_binary(url) and url != "" ->
+          uri = URI.parse(url)
+          name = uri.host
+          normalized_url = URI.to_string(uri) |> String.trim("/")
+          attrs |> Map.put("url", normalized_url) |> Map.put("name", name)
+
+        _ ->
+          attrs
+      end
 
     relay
     |> cast(attrs, [:name, :url, :description, :banner, :icon, :pubkey, :contact, :supported_nips, :software, :version])
     |> validate_required([:url])
     |> unique_constraint([:url])
-  end
-
-  def changeset(_relay, _attrs) do
-    {:error, "URL is a required attrs"}
   end
 
   def get("wss" <> rest), do: get("https" <> rest)
@@ -40,7 +43,7 @@ defmodule Mist.Relay.Info do
 
   def get(url) do
     header = %{"accept" => "application/nostr+json"}
-    case Req.get(url, headers: header) do
+    case Req.get(url, headers: header, receive_timeout: 5_000) do
       {:ok, resp} -> {:ok, resp.body}
       err -> err
     end

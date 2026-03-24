@@ -32,26 +32,37 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def handle_info({:fetch_relay_info, {id, state}}, socket) do
-    case Relay.Info.get(state.url) do
-      {:ok, info} ->
-        if is_map(info) do
-            Relay.create_or_update_relay(state.url, info)
-            updated_relays =
-              Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: info} end)
-              {:noreply, assign(socket, :relays, updated_relays)}
-        else
-            Logger.warning("Could not decode relay info data")
-            {:noreply, socket}
-        end
+    lv_pid = self()
 
-      {:error, _reason} ->
-        updated_relays =
-          Map.update(socket.assigns.relays, id, state, fn x ->
-            %{x | relay_info: %{"status" => "unavailable"}}
-          end)
+    Task.Supervisor.start_child(Mist.TaskSupervisor, fn ->
+      result = Relay.Info.get(state.url)
+      send(lv_pid, {:relay_info_result, id, state, result})
+    end)
 
-        {:noreply, assign(socket, :relays, updated_relays)}
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:relay_info_result, id, state, {:ok, info}}, socket) do
+    if is_map(info) do
+      Relay.create_or_update_relay(state.url, info)
+      updated_relays =
+        Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: info} end)
+      {:noreply, assign(socket, :relays, updated_relays)}
+    else
+      Logger.warning("Could not decode relay info data")
+      {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_info({:relay_info_result, id, state, {:error, _reason}}, socket) do
+    updated_relays =
+      Map.update(socket.assigns.relays, id, state, fn x ->
+        %{x | relay_info: %{"status" => "unavailable"}}
+      end)
+
+    {:noreply, assign(socket, :relays, updated_relays)}
   end
 
   @impl true

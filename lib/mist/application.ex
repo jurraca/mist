@@ -15,7 +15,8 @@ defmodule Mist.Application do
         MistWeb.Telemetry,
         Mist.Repo,
         {DNSCluster, query: Application.get_env(:mist, :dns_cluster_query) || :ignore},
-        {Phoenix.PubSub, name: Mist.PubSub}
+        {Phoenix.PubSub, name: Mist.PubSub},
+        {Task.Supervisor, name: Mist.TaskSupervisor}
       ] ++
         if Application.get_env(:mist, :skip_nostr_services, false) do
           []
