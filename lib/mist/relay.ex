@@ -104,6 +104,17 @@ defmodule Mist.Relay do
     end
   end
 
+  @doc """
+  Gets a relay by URL. Returns `{:ok, relay}` if found, `{:error, :not_found}` otherwise.
+  """
+  def get_relay_by_url(url) do
+    url = String.trim(url, "/")
+    case Repo.get_by(Info, url: url) do
+      nil -> {:error, :not_found}
+      relay -> {:ok, relay}
+    end
+  end
+
   def create_or_update_relay(url, attrs \\ %{}) do
     url = String.trim(url, "/")
     case get_or_create_relay(url) do
@@ -115,24 +126,6 @@ defmodule Mist.Relay do
 
       error ->
         error
-    end
-  end
-
-  @doc """
-  Gets or creates the relay_metadata row for the given relay.
-  """
-  def get_or_create_metadata(%Info{} = relay, attrs \\ %{}) do
-    attrs = Map.merge(attrs, %{"relay_id" => relay.id})
-    case Repo.get_by(Metadata, relay_id: relay.id) do
-      nil ->
-        %Metadata{}
-        |> Metadata.changeset(attrs)
-        |> Repo.insert()
-
-      metadata ->
-        metadata
-        |> Metadata.changeset(attrs)
-        |> Repo.update()
     end
   end
 
@@ -198,16 +191,11 @@ defmodule Mist.Relay do
   defp upsert_metadata(%Info{} = relay, attrs) do
     metadata_attrs = Map.merge(attrs, %{"relay_id" => relay.id})
 
-    case Repo.get_by(Metadata, relay_id: relay.id) do
-      nil ->
-        %Metadata{}
-        |> Metadata.changeset(metadata_attrs)
-        |> Repo.insert()
-
-      metadata ->
-        metadata
-        |> Metadata.changeset(metadata_attrs)
-        |> Repo.update()
-    end
+    %Metadata{}
+    |> Metadata.changeset(metadata_attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, [:name, :description, :banner, :icon, :pubkey, :contact, :supported_nips, :software, :version, :updated_at]},
+      conflict_target: :relay_id
+    )
   end
 end

@@ -14,6 +14,7 @@ defmodule MistWeb.RelayLive.Index do
     socket =
       socket
       |> assign(:page_title, "My Relays")
+      |> assign(:pending_info_ids, MapSet.new())
       |> refresh_relay_assigns()
 
     {:ok, socket}
@@ -36,30 +37,35 @@ defmodule MistWeb.RelayLive.Index do
       send(lv_pid, {:relay_info_result, id, state, result})
     end)
 
-    {:noreply, socket}
+    pending = MapSet.put(socket.assigns.pending_info_ids, id)
+    {:noreply, assign(socket, :pending_info_ids, pending)}
   end
 
   @impl true
   def handle_info({:relay_info_result, id, state, {:ok, info}}, socket) do
+    pending = MapSet.delete(socket.assigns.pending_info_ids, id)
+
     if is_map(info) do
       Relay.create_or_update_relay(state.url, info)
       updated_relays =
         Map.update(socket.assigns.relays, id, state, fn x -> %{x | relay_info: info} end)
-      {:noreply, assign(socket, :relays, updated_relays)}
+      {:noreply, socket |> assign(:pending_info_ids, pending) |> assign(:relays, updated_relays)}
     else
       Logger.warning("Could not decode relay info data")
-      {:noreply, socket}
+      {:noreply, assign(socket, :pending_info_ids, pending)}
     end
   end
 
   @impl true
   def handle_info({:relay_info_result, id, state, {:error, _reason}}, socket) do
+    pending = MapSet.delete(socket.assigns.pending_info_ids, id)
+
     updated_relays =
       Map.update(socket.assigns.relays, id, state, fn x ->
         %{x | relay_info: %{"status" => "unavailable"}}
       end)
 
-    {:noreply, assign(socket, :relays, updated_relays)}
+    {:noreply, socket |> assign(:pending_info_ids, pending) |> assign(:relays, updated_relays)}
   end
 
   @impl true
@@ -115,7 +121,7 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def handle_event("delete", %{"url" => url}, socket) do
-    case Relay.get_or_create_relay(url) do
+    case Relay.get_relay_by_url(url) do
       {:ok, relay} ->
         if MapSet.member?(MapSet.new(NostrEx.list_relays()), url) do
           RelayManager.disconnect(url)
@@ -136,14 +142,21 @@ defmodule MistWeb.RelayLive.Index do
   defp refresh_relay_assigns(socket) do
     relay_list = get_relay_states()
     relay_map = Map.new(relay_list, &{&1.id, &1})
+    pending = Map.get(socket.assigns, :pending_info_ids, MapSet.new())
 
-    for {id, state} <- relay_map do
-      if is_nil(state.relay_info) do
-        send(self(), {:fetch_relay_info, {id, state}})
-      end
-    end
+    new_pending =
+      Enum.reduce(relay_map, pending, fn {id, state}, acc ->
+        if is_nil(state.relay_info) and not MapSet.member?(acc, id) do
+          send(self(), {:fetch_relay_info, {id, state}})
+          MapSet.put(acc, id)
+        else
+          acc
+        end
+      end)
 
-    assign(socket, :relays, relay_map)
+    socket
+    |> assign(:relays, relay_map)
+    |> assign(:pending_info_ids, new_pending)
   end
 
   defp get_relay_states() do
