@@ -8,22 +8,24 @@ defmodule MistWeb.ProfileLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     Phoenix.PubSub.subscribe(Mist.PubSub, "profiles")
-    with {:ok, profile} <- Profile.get_my_profile(),
-        follows <- Map.get(profile, :following) do
+
+    case Profile.get_my_profile() do
+      {:ok, profile} ->
+        follows = Map.get(profile, :following)
 
         {:ok,
          socket
          |> stream(:profiles, follows || [])
          |> assign(:search_form, to_form(%{"search_term" => ""}))
          |> assign(:parsed_profile, nil)}
-    else
+
       {:error, _reason} ->
-      {:ok, socket
+        {:ok,
+         socket
          |> stream(:profiles, [])
          |> assign(:search_form, to_form(%{"search_term" => ""}))
-         |> assign(:parsed_profile, nil)
-        }
-     end
+         |> assign(:parsed_profile, nil)}
+    end
   end
 
   @impl true
@@ -38,7 +40,10 @@ defmodule MistWeb.ProfileLive.Index do
 
       case search(profile_data) do
         {:ok, profile, :local} ->
-          {:noreply, stream_insert(socket, :profiles, profile)}
+          {:noreply,
+           socket
+           |> stream_insert(:profiles, profile)
+           |> assign(:parsed_profile, nil)}
 
         {:ok, %{pubkey: pubkey, relays: relays}} when relays != [] ->
           {:noreply,
@@ -64,19 +69,23 @@ defmodule MistWeb.ProfileLive.Index do
   end
 
   @impl true
-  def handle_event("delete", %{"id" => id}, socket) do
-    profile = Profile.get_profile!(id)
-    {:ok, _} = Profile.delete_profile(profile)
-
-    {:noreply, stream_delete(socket, :profiles, profile)}
-  end
-
-  @impl true
   def handle_event("follow", %{"pubkey" => pubkey}, socket) do
-    :persistent_term.get(:my_profile_pubkey, nil)
-    |> Profile.follow_profile(pubkey)
+    my_pubkey = :persistent_term.get(:my_profile_pubkey, nil)
 
-    {:noreply, socket}
+    if is_nil(my_pubkey) do
+      {:noreply, put_flash(socket, :error, "No keypair configured — cannot follow profiles")}
+    else
+      case Profile.follow_profile(my_pubkey, pubkey) do
+        :ok ->
+          {:noreply, put_flash(socket, :info, "Followed successfully")}
+
+        {:ok, _} ->
+          {:noreply, put_flash(socket, :info, "Followed successfully")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Failed to follow: #{inspect(reason)}")}
+      end
+    end
   end
 
   @impl true
@@ -88,7 +97,7 @@ defmodule MistWeb.ProfileLive.Index do
   def handle_info(_, socket), do: {:noreply, socket}
 
   defp search(%{pubkey: pubkey, relays: relays} = profile_data) when relays != [] do
-    case find_local_profile(profile_data.pubkey) do
+    case Profile.get_by_pubkey(profile_data.pubkey) do
       {:ok, profile} ->
         {:ok, profile, :local}
 
@@ -105,31 +114,12 @@ defmodule MistWeb.ProfileLive.Index do
 
   defp search(%{pubkey: _pubkey} = data), do: {:ok, data}
 
-  defp find_local_profile(pubkey) do
-    Profile.get_by_pubkey(pubkey)
-  end
-
   @impl true
-  def handle_params(params, _url, socket) do
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
-  end
-
-  defp apply_action(socket, :edit, %{"id" => id}) do
-    socket
-    |> assign(:page_title, "Edit Profile")
-    |> assign(:profile, Profile.get_profile!(id))
-  end
-
-  defp apply_action(socket, :new, _params) do
-    socket
-    |> assign(:page_title, "New Profile")
-    |> assign(:profile, %Profile.Profile{})
-  end
-
-  defp apply_action(socket, :index, _params) do
-    socket
-    |> assign(:page_title, "Profiles")
-    |> assign(:profiles, [])
+  def handle_params(_params, _url, socket) do
+    {:noreply,
+     socket
+     |> assign(:page_title, "Profiles")
+     |> assign(:profiles, [])}
   end
 
   defp parse_identifier("nprofile" <> _rest = input) do
