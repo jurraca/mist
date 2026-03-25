@@ -244,19 +244,46 @@ defmodule Mist.Profile do
       {:ok, profile} ->
         now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-        relay_attrs =
+        parsed_tags =
           user_relays
           |> Enum.map(fn tag ->
-            case parse_tag(tag) do
-              {:ok, parsed} ->
-                parsed
-                |> Map.put(:pubkey, profile.pubkey)
-                |> Map.put(:profile_id, profile.id)
-                |> Map.put(:inserted_at, now)
-                |> Map.put(:updated_at, now)
+            case parse_tag_url_purpose(tag) do
+              {:ok, parsed} -> parsed
+              _err -> nil
+            end
+          end)
+          |> Enum.reject(&is_nil/1)
 
-              _err ->
-                nil
+        relay_urls = Enum.map(parsed_tags, & &1.relay_url) |> Enum.uniq()
+
+        relay_rows =
+          relay_urls
+          |> Enum.map(fn url ->
+            uri = URI.parse(url)
+            %{url: url, name: uri.host, inserted_at: now, updated_at: now}
+          end)
+
+        Repo.insert_all(Mist.Relay.Info, relay_rows, on_conflict: :nothing, conflict_target: :url)
+
+        relay_map =
+          from(r in Mist.Relay.Info, where: r.url in ^relay_urls)
+          |> Repo.all()
+          |> Map.new(fn r -> {r.url, r.id} end)
+
+        relay_attrs =
+          parsed_tags
+          |> Enum.map(fn %{relay_url: url, purpose: purpose} ->
+            case Map.get(relay_map, url) do
+              nil -> nil
+              relay_id ->
+                %{
+                  relay_id: relay_id,
+                  purpose: purpose,
+                  pubkey: profile.pubkey,
+                  profile_id: profile.id,
+                  inserted_at: now,
+                  updated_at: now
+                }
             end
           end)
           |> Enum.reject(&is_nil/1)
@@ -376,8 +403,13 @@ defmodule Mist.Profile do
   @doc """
   Updates the last relay check timestamp for a profile.
   """
-  def update_relay_check_timestamp(pubkey) do
+  def update_relay_check_timestamp(pubkey) when is_binary(pubkey) do
     from(p in Profile, where: p.pubkey == ^pubkey)
+    |> Repo.update_all(set: [relay_last_checked: DateTime.utc_now() |> DateTime.truncate(:second)])
+  end
+
+  def update_relay_check_timestamp(pubkeys) when is_list(pubkeys) do
+    from(p in Profile, where: p.pubkey in ^pubkeys)
     |> Repo.update_all(set: [relay_last_checked: DateTime.utc_now() |> DateTime.truncate(:second)])
   end
 
@@ -643,13 +675,13 @@ defmodule Mist.Profile do
     end
   end
 
-  defp parse_tag(%{data: relay_url, info: info}) do
-    {:ok, relay} = Mist.Relay.get_or_create_relay(relay_url)
+  defp parse_tag_url_purpose(%{data: relay_url, info: info}) do
+    normalized_url = URI.to_string(URI.parse(relay_url)) |> String.trim("/")
     purpose = translate_rw(info)
-    {:ok, %{relay_id: relay.id, purpose: purpose}}
+    {:ok, %{relay_url: normalized_url, purpose: purpose}}
   end
 
-  defp parse_tag(_tag) do
+  defp parse_tag_url_purpose(_tag) do
     {:error, "missing a required key in tag: data or info"}
   end
 

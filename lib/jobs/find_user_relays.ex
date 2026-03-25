@@ -193,12 +193,12 @@ defmodule Mist.Jobs.FindUserRelays do
   defp update_check_timestamps(profiles) do
     pubkeys = Enum.map(profiles, & &1.pubkey)
 
-    Enum.each(pubkeys, fn pubkey ->
-      case Profile.update_relay_check_timestamp(pubkey) do
-        {1, _} -> :ok
-        {0, _} -> Logger.warning("Failed to update timestamp for #{String.slice(pubkey, 0, 8)}")
-      end
-    end)
+    case Profile.update_relay_check_timestamp(pubkeys) do
+      {count, _} ->
+        if count != length(pubkeys) do
+          Logger.warning("Expected to update #{length(pubkeys)} relay check timestamps, updated #{count}")
+        end
+    end
 
     Logger.info("Updated relay check timestamps for #{length(pubkeys)} profiles")
   end
