@@ -194,20 +194,26 @@ defmodule Mist.Profile do
         Repo.insert_all(Profile, new_profile_rows, on_conflict: :nothing)
       end
 
-      all_profiles =
-        if pubkeys == [] do
+      newly_inserted_profiles =
+        if new_pubkeys == [] do
           []
         else
-          from(p in Profile, where: p.pubkey in ^pubkeys)
+          from(p in Profile, where: p.pubkey in ^new_pubkeys)
           |> Repo.all()
         end
 
-      Enum.each(existing_profiles, fn profile ->
+      all_profiles = existing_profiles ++ newly_inserted_profiles
+
+      existing_profiles
+      |> Enum.filter(fn profile ->
         incoming_relay = Map.get(pubkey_to_relay, profile.pubkey)
-        if not is_nil(incoming_relay) and incoming_relay != profile.relay do
-          from(p in Profile, where: p.pubkey == ^profile.pubkey)
-          |> Repo.update_all(set: [relay: incoming_relay, updated_at: now])
-        end
+        not is_nil(incoming_relay) and incoming_relay != profile.relay
+      end)
+      |> Enum.group_by(fn profile -> Map.get(pubkey_to_relay, profile.pubkey) end)
+      |> Enum.each(fn {relay_value, profiles} ->
+        pubkeys_to_update = Enum.map(profiles, & &1.pubkey)
+        from(p in Profile, where: p.pubkey in ^pubkeys_to_update)
+        |> Repo.update_all(set: [relay: relay_value, updated_at: now])
       end)
 
       follow_list_attrs =
@@ -271,9 +277,11 @@ defmodule Mist.Profile do
   end
 
   def get_or_create_profile(%{"pubkey" => pubkey} = attrs) do
-    case get_by_pubkey(pubkey) do
-      {:error, :not_found} -> create_profile(attrs)
+    changeset = Profile.changeset(%Profile{}, attrs)
+    case Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:pubkey]) do
+      {:ok, %Profile{id: nil}} -> get_by_pubkey(pubkey)
       {:ok, profile} -> {:ok, profile}
+      {:error, _} = error -> error
     end
   end
 
@@ -281,11 +289,13 @@ defmodule Mist.Profile do
     create_or_update_profile(Map.merge(attrs, %{"pubkey" => pubkey}))
   end
 
-  def create_or_update_profile(%{"pubkey" => pubkey} = attrs) do
-    case get_by_pubkey(pubkey) do
-      {:error, :not_found} -> create_profile(attrs)
-      {:ok, profile} -> update_profile(profile, attrs)
-    end
+  def create_or_update_profile(%{"pubkey" => _pubkey} = attrs) do
+    changeset = Profile.changeset(%Profile{}, attrs)
+    Repo.insert(changeset,
+      on_conflict: {:replace, [:name, :about, :picture, :display_name, :website, :banner, :bot, :relay, :updated_at]},
+      conflict_target: [:pubkey],
+      returning: true
+    )
   end
 
   def create_profile_from_tag(%Nostr.Tag{data: pubkey, info: info}) do
@@ -296,11 +306,13 @@ defmodule Mist.Profile do
         _ -> {%{pubkey: pubkey}, %{}}
       end
 
+    changeset = Profile.changeset(%Profile{}, profile_attrs)
     profile_result =
-      case get_by_pubkey(pubkey) do
-        {:error, :not_found} -> create_profile(profile_attrs)
-        {:ok, profile} -> update_profile(profile, profile_attrs)
-      end
+      Repo.insert(changeset,
+        on_conflict: {:replace, [:name, :about, :picture, :display_name, :website, :banner, :bot, :relay, :updated_at]},
+        conflict_target: [:pubkey],
+        returning: true
+      )
 
     case profile_result do
       {:ok, profile} -> {:ok, Map.put(profile, :_follow_attrs, follow_attrs)}
