@@ -64,8 +64,11 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   @impl true
-  def handle_params(params, _url, socket) do
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  def handle_params(params, url, socket) do
+    {:noreply,
+     socket
+     |> assign(:current_path, URI.parse(url).path)
+     |> apply_action(socket.assigns.live_action, params)}
   end
 
   defp apply_action(socket, :index, _params) do
@@ -111,7 +114,7 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def handle_info({:identity_switched, _pubkey}, socket) do
-    {:noreply, push_navigate(socket, to: "/")}
+    {:noreply, push_navigate(socket, to: socket.assigns[:current_path] || "/")}
   end
 
   @impl true

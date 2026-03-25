@@ -97,7 +97,7 @@ defmodule MistWeb.ProfileLive.Index do
 
   @impl true
   def handle_info({:identity_switched, _pubkey}, socket) do
-    {:noreply, push_navigate(socket, to: "/")}
+    {:noreply, push_navigate(socket, to: socket.assigns[:current_path] || "/")}
   end
 
   @impl true
@@ -122,9 +122,10 @@ defmodule MistWeb.ProfileLive.Index do
   defp search(%{pubkey: _pubkey} = data), do: {:ok, data}
 
   @impl true
-  def handle_params(_params, _url, socket) do
+  def handle_params(_params, url, socket) do
     {:noreply,
      socket
+     |> assign(:current_path, URI.parse(url).path)
      |> assign(:page_title, "Profiles")
      |> assign(:profiles, [])}
   end

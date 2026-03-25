@@ -4,7 +4,7 @@ defmodule MistWeb.LiveIdentity do
 
   If no pubkey is configured, redirects to /welcome.
   Also subscribes connected LiveViews to the "identity:switched" PubSub topic
-  so they navigate to / when the identity changes.
+  so they can re-navigate when the identity changes.
   """
 
   import Phoenix.LiveView

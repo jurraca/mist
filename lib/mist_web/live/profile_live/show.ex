@@ -7,7 +7,7 @@ defmodule MistWeb.ProfileLive.Show do
   alias Nostr.Bech32
 
   @impl true
-  def handle_params(%{"id" => id}, _, socket) do
+  def handle_params(%{"id" => id}, url, socket) do
     profile = Profile.get_profile!(id)
 
     npub =
@@ -20,6 +20,7 @@ defmodule MistWeb.ProfileLive.Show do
 
     {:noreply,
      socket
+     |> assign(:current_path, URI.parse(url).path)
      |> assign(:page_title, display_name)
      |> assign(:profile, profile)
      |> assign(:display_name, display_name)}
@@ -27,7 +28,7 @@ defmodule MistWeb.ProfileLive.Show do
 
   @impl true
   def handle_info({:identity_switched, _pubkey}, socket) do
-    {:noreply, push_navigate(socket, to: "/")}
+    {:noreply, push_navigate(socket, to: "/profiles")}
   end
 
   @impl true
