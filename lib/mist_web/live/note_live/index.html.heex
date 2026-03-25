@@ -139,7 +139,7 @@
             </div>
             <div class="text-xs text-text-muted font-mono">
               <%= if note.created_at do %>
-                {DateTime.from_unix!(note.created_at)}
+                {note.created_at}
               <% else %>
                 Just now
               <% end %>
