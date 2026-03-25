@@ -25,6 +25,15 @@
               </option>
             </optgroup>
             <option value="hashtag" selected={@subscription_filter == :hashtag}>Hashtag</option>
+            <optgroup :if={length(@saved_subscriptions) > 0} label="Subscriptions">
+              <option
+                :for={sub <- @saved_subscriptions}
+                value={"subscription:#{sub.id}"}
+                selected={@selected_subscription_id == sub.id}
+              >
+                🔖 {sub.name}
+              </option>
+            </optgroup>
           </select>
         </form>
 

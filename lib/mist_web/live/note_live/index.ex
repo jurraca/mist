@@ -6,6 +6,7 @@ defmodule MistWeb.NoteLive.Index do
   alias Mist.Nostr.{Dispatcher, Event, Keys}
   alias Mist.Notes
   alias Mist.Profile
+  alias Mist.Subscriptions
   alias MistWeb.NoteLive.GraphUpdater
 
   @impl true
@@ -33,6 +34,7 @@ defmodule MistWeb.NoteLive.Index do
     initial_graph = GraphUpdater.from_notes(stored_notes)
 
     has_local_keypair = match?({:ok, _}, Keys.get_private_key())
+    saved_subscriptions = Subscriptions.list_subscriptions()
 
     socket =
       socket
@@ -50,7 +52,9 @@ defmodule MistWeb.NoteLive.Index do
       |> assign(:pending_graph_updates, [])
       |> assign(:batch_timer_ref, nil)
       |> assign(:has_local_keypair, has_local_keypair)
-      |> assign(:notes_empty_message, empty_state_message(%{subscription_filter: :following, follow_pubkeys: follow_pubkeys, hashtag_filter: "", selected_relay: nil}, stored_notes))
+      |> assign(:saved_subscriptions, saved_subscriptions)
+      |> assign(:selected_subscription_id, nil)
+      |> assign(:notes_empty_message, empty_state_message(%{subscription_filter: :following, follow_pubkeys: follow_pubkeys, hashtag_filter: "", selected_relay: nil, selected_subscription_id: nil}, stored_notes))
 
     socket =
       if connected?(socket) do
@@ -152,6 +156,22 @@ defmodule MistWeb.NoteLive.Index do
           |> assign(:subscription_filter, {:list, list_id})
           |> assign(:selected_list, list_id)
           |> assign(:list_pubkeys, list_pubkeys)
+          |> assign(:selected_subscription_id, nil)
+          |> clear_ui_state()
+          |> reload_notes_for_filter()
+
+        socket = maybe_flash_no_relays(apply_subscription(socket), socket)
+        {:noreply, socket}
+
+      String.starts_with?(filter, "subscription:") ->
+        [_, sub_id] = String.split(filter, ":")
+        sub_id = String.to_integer(sub_id)
+
+        socket =
+          socket
+          |> assign(:subscription_filter, {:subscription, sub_id})
+          |> assign(:selected_subscription_id, sub_id)
+          |> assign(:selected_list, nil)
           |> clear_ui_state()
           |> reload_notes_for_filter()
 
@@ -172,6 +192,7 @@ defmodule MistWeb.NoteLive.Index do
           socket
           |> assign(:subscription_filter, filter_atom)
           |> assign(:selected_list, nil)
+          |> assign(:selected_subscription_id, nil)
           |> clear_ui_state()
           |> reload_notes_for_filter()
 
@@ -219,10 +240,11 @@ defmodule MistWeb.NoteLive.Index do
   defp reload_notes_for_filter(socket) do
     notes =
       case socket.assigns.subscription_filter do
-        :following    -> Notes.list_recent_by_pubkeys(socket.assigns.follow_pubkeys)
-        {:list, _id}  -> Notes.list_recent_by_pubkeys(socket.assigns.list_pubkeys)
-        :hashtag      -> Notes.list_recent_by_hashtag(socket.assigns.hashtag_filter)
-        _             -> Notes.list_recent()
+        :following              -> Notes.list_recent_by_pubkeys(socket.assigns.follow_pubkeys)
+        {:list, _id}            -> Notes.list_recent_by_pubkeys(socket.assigns.list_pubkeys)
+        :hashtag                -> Notes.list_recent_by_hashtag(socket.assigns.hashtag_filter)
+        {:subscription, _id}    -> Notes.list_recent()
+        _                       -> Notes.list_recent()
       end
 
     graph = GraphUpdater.from_notes(notes)
@@ -251,6 +273,8 @@ defmodule MistWeb.NoteLive.Index do
         "Select a relay from the dropdown above."
       :single_relay ->
         "No recent notes on #{assigns.selected_relay}."
+      {:subscription, _} ->
+        "No notes found for this subscription."
       _ ->
         "No notes found."
     end
@@ -317,10 +341,73 @@ defmodule MistWeb.NoteLive.Index do
           {:ok, %{filters: [kinds: [1], authors: pubkeys]}}
         end
 
+      {:subscription, sub_id} ->
+        build_saved_subscription_filter(sub_id)
+
       _ ->
         {:ok, %{filters: [kinds: [1]]}}
     end
   end
+
+  defp build_saved_subscription_filter(sub_id) do
+    try do
+      sub = Subscriptions.get_subscription!(sub_id)
+      filter = []
+
+      filter =
+        case sub.kinds do
+          kinds when is_list(kinds) and kinds != [] -> Keyword.put(filter, :kinds, kinds)
+          _ -> filter
+        end
+
+      filter =
+        case sub.authors do
+          authors when is_list(authors) and authors != [] ->
+            Keyword.put(filter, :authors, authors)
+          _ -> filter
+        end
+
+      filter =
+        case sub.since do
+          nil -> filter
+          since -> Keyword.put(filter, :since, since)
+        end
+
+      filter =
+        case sub.until do
+          nil -> filter
+          until -> Keyword.put(filter, :until, until)
+        end
+
+      filter =
+        case sub.limit do
+          nil -> filter
+          limit -> Keyword.put(filter, :limit, limit)
+        end
+
+      filter =
+        case sub.tags do
+          nil -> filter
+          tags when is_map(tags) ->
+            Enum.reduce(tags, filter, fn {key, values}, acc ->
+              case tag_filter_key(key) do
+                nil -> acc
+                tag_key -> Keyword.put(acc, tag_key, values)
+              end
+            end)
+          _ -> filter
+        end
+
+      {:ok, %{filters: filter}}
+    rescue
+      Ecto.NoResultsError -> :skip
+    end
+  end
+
+  defp tag_filter_key(<<c::utf8>>) when c in ?a..?z or c in ?A..?Z do
+    String.to_atom("##{<<c::utf8>>}")
+  end
+  defp tag_filter_key(_), do: nil
 
   defp update_stream_counts(socket, note_id, counts) do
     push_event(socket, "update_note_counts", %{note_id: note_id, counts: counts})

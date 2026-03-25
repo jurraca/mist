@@ -28,6 +28,12 @@ The frontend implements a modern, dark-themed interface with real-time capabilit
 
 The frontend includes hooks for the NetworkGraph component that handles dynamic graph updates with shimmer effects for new nodes.
 
+## Subscriptions (Saved Feed Filters)
+- **Mist.Subscriptions context** (`lib/mist/subscriptions.ex`): CRUD operations for saved subscriptions
+- **Mist.Subscriptions.Subscription schema** (`lib/mist/subscriptions/subscription.ex`): Ecto schema for the `subscriptions` table (name, kinds, authors, since, until, limit, tags as JSONB)
+- **SubscriptionLive** (`lib/mist_web/live/subscription_live/`): Manages saved subscriptions (create/edit/delete). No longer fires raw Nostr requests.
+- **NoteLive integration**: The Notes feed dropdown includes a "Subscriptions" optgroup. Selecting a saved subscription maps its fields to a Nostr filter and applies it as `:notes_feed`.
+
 ## Data Storage
 The application uses SQLite as the primary database through:
 
