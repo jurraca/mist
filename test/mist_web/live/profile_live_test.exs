@@ -42,25 +42,7 @@ defmodule MistWeb.ProfileLiveTest do
     test "displays profile", %{conn: conn, profile: profile} do
       {:ok, _show_live, html} = live(conn, ~p"/profiles/#{profile}")
 
-      assert html =~ "Show Profile"
-    end
-
-    test "updates profile within modal", %{conn: conn, profile: profile} do
-      {:ok, show_live, _html} = live(conn, ~p"/profiles/#{profile}")
-
-      assert show_live |> element("a", "Edit") |> render_click() =~
-               "Edit Profile"
-
-      assert_patch(show_live, ~p"/profiles/#{profile}/show/edit")
-
-      assert show_live
-             |> form("#profile-form")
-             |> render_submit()
-
-      assert_patch(show_live, ~p"/profiles/#{profile}")
-
-      html = render(show_live)
-      assert html =~ "Profile updated successfully"
+      assert html =~ "Back to profiles"
     end
   end
 end

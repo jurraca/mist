@@ -1,22 +1,48 @@
 <.header>
-  Profile {@profile.id}
-  <:subtitle>This is a profile record from your database.</:subtitle>
-  <:actions>
-    <.link patch={~p"/profiles/#{@profile}/show/edit"} phx-click={JS.push_focus()}>
-      <.button>Edit profile</.button>
-    </.link>
-  </:actions>
+  {@display_name}
 </.header>
 
-<.back navigate={~p"/profiles"}>Back to profiles</.back>
+<div class="mt-6 space-y-6">
+  <div class="flex items-center gap-4">
+    <%= if @profile.picture do %>
+      <img src={@profile.picture} alt="Avatar" class="w-20 h-20 rounded-full object-cover" />
+    <% end %>
+    <div>
+      <p class="text-lg font-semibold"><%= @display_name %></p>
+      <%= if @profile.about do %>
+        <p class="mt-1 text-sm text-gray-600"><%= @profile.about %></p>
+      <% end %>
+    </div>
+  </div>
 
-<.modal :if={@live_action == :edit} id="profile-modal" show on_cancel={JS.patch(~p"/profiles/#{@profile}")}>
-  <.live_component
-    module={MistWeb.ProfileLive.FormComponent}
-    id={@profile.id}
-    title={@page_title}
-    action={@live_action}
-    profile={@profile}
-    patch={~p"/profiles/#{@profile}"}
-  />
-</.modal>
+  <dl class="space-y-3">
+    <div>
+      <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Pubkey</dt>
+      <dd><code class="text-xs font-mono truncate block max-w-xs" title={@profile.pubkey}><%= @profile.pubkey %></code></dd>
+    </div>
+
+    <%= if @profile.website do %>
+      <div>
+        <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Website</dt>
+        <dd>
+          <a href={@profile.website} target="_blank" rel="noopener noreferrer" class="text-sm text-blue-600 hover:underline">
+            <%= @profile.website %>
+          </a>
+        </dd>
+      </div>
+    <% end %>
+
+    <%= if @profile.banner do %>
+      <div>
+        <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Banner</dt>
+        <dd>
+          <a href={@profile.banner} target="_blank" rel="noopener noreferrer" class="text-sm text-blue-600 hover:underline">
+            <%= @profile.banner %>
+          </a>
+        </dd>
+      </div>
+    <% end %>
+  </dl>
+</div>
+
+<.back navigate={~p"/profiles"}>Back to profiles</.back>

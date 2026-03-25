@@ -26,7 +26,6 @@ defmodule MistWeb.Router do
     live "/notes/new", NoteLive.Index, :new
     live "/profiles", ProfileLive.Index, :index
     live "/profiles/:id", ProfileLive.Show, :show
-    live "/profiles/:id/show/edit", ProfileLive.Show, :edit
     live "/profile/manage", ProfileLive.Manage, :index
     live "/profile/manage/follows", ProfileLive.ManageFollows, :index
     live "/profile", UserProfile.Index, :index

@@ -2,20 +2,24 @@ defmodule MistWeb.ProfileLive.Show do
   use MistWeb, :live_view
 
   alias Mist.Profile
-
-  @impl true
-  def mount(_params, _session, socket) do
-    {:ok, socket}
-  end
+  alias Nostr.Bech32
 
   @impl true
   def handle_params(%{"id" => id}, _, socket) do
+    profile = Profile.get_profile!(id)
+
+    npub =
+      case Bech32.hex_to_npub(profile.pubkey) do
+        {:ok, npub} -> npub
+        _ -> profile.pubkey
+      end
+
+    display_name = profile.display_name || profile.name || npub
+
     {:noreply,
      socket
-     |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:profile, Profile.get_profile!(id))}
+     |> assign(:page_title, display_name)
+     |> assign(:profile, profile)
+     |> assign(:display_name, display_name)}
   end
-
-  defp page_title(:show), do: "Show Profile"
-  defp page_title(:edit), do: "Edit Profile"
 end
