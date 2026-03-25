@@ -124,31 +124,14 @@ defmodule Mist.Nostr.EventHandler do
     end
   end
 
-  defp fetch_author_data(%{pubkey: pubkey} = event) do
-    profile =
-      case Profile.get_by_pubkey(pubkey) do
-        {:ok, p} -> p
-        {:error, :not_found} -> nil
-      end
-
+  defp fetch_author_data(event) do
     event_map = Map.from_struct(event)
-    
     counts = get_interaction_counts(event.id)
-    
-    case profile do
-      nil -> event_map
-        |> Map.put(:author, nil)
-        |> Map.put(:bot, false)
-        |> Map.merge(counts)
-      %{name: nil, bot: bot} -> event_map
-        |> Map.put(:author, nil)
-        |> Map.put(:bot, bot)
-        |> Map.merge(counts)
-      %{name: name, bot: bot} -> event_map
-        |> Map.put(:author, name)
-        |> Map.put(:bot, bot)
-        |> Map.merge(counts)
-    end
+
+    event_map
+    |> Map.put(:author, nil)
+    |> Map.put(:bot, false)
+    |> Map.merge(counts)
   end
 
   # Helper functions for tracking interaction counts
