@@ -98,13 +98,15 @@ defmodule Mist.RelayTest do
       assert {:ok, %RelaySchema{} = relay} =
                Relay.create_or_update_relay("wss://brand-new.example.com", %{"description" => "new"})
 
-      assert relay.metadata.description == "new"
+      meta = Repo.get_by(Metadata, relay_id: relay.id)
+      assert meta.description == "new"
     end
 
     test "updates metadata when relay already exists" do
       {:ok, _} = Relay.create_or_update_relay("wss://existing.example.com", %{"description" => "old"})
       {:ok, updated} = Relay.create_or_update_relay("wss://existing.example.com", %{"description" => "updated"})
-      assert updated.metadata.description == "updated"
+      meta = Repo.get_by(Metadata, relay_id: updated.id)
+      assert meta.description == "updated"
     end
   end
 

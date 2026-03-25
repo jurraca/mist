@@ -162,6 +162,7 @@ defmodule MistWeb.RelayLive.Index do
   defp get_relay_states() do
     db_relays = Relay.list_relays()
     connected_urls = NostrEx.list_relays() |> MapSet.new()
+    one_hour_ago = DateTime.utc_now() |> DateTime.add(-3600)
 
     Enum.map(db_relays, fn relay ->
       relay_info =
@@ -170,7 +171,7 @@ defmodule MistWeb.RelayLive.Index do
           %Metadata{} = meta -> info_to_display_map(meta)
         end
 
-      needs_fetch = is_nil(relay.metadata) || stale_metadata?(relay.metadata)
+      needs_fetch = is_nil(relay.metadata) || stale_metadata?(relay.metadata, one_hour_ago)
 
       %Relay.Status{
         id: "relay-#{relay.id}",
@@ -182,8 +183,7 @@ defmodule MistWeb.RelayLive.Index do
     end)
   end
 
-  defp stale_metadata?(%Metadata{updated_at: updated_at}) do
-    one_hour_ago = DateTime.utc_now() |> DateTime.add(-3600)
+  defp stale_metadata?(%Metadata{updated_at: updated_at}, one_hour_ago) do
     DateTime.compare(updated_at, one_hour_ago) == :lt
   end
 

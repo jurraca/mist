@@ -120,7 +120,7 @@ defmodule Mist.Relay do
     case get_or_create_relay(url) do
       {:ok, relay} ->
         case upsert_metadata(relay, attrs) do
-          {:ok, _metadata} -> {:ok, Repo.preload(relay, :metadata, force: true)}
+          {:ok, _metadata} -> {:ok, relay}
           error -> error
         end
 
