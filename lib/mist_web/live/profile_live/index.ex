@@ -1,6 +1,8 @@
 defmodule MistWeb.ProfileLive.Index do
   use MistWeb, :live_view
 
+  on_mount {MistWeb.LiveIdentity, :require_identity}
+
   alias Mist.Profile
   alias Mist.Nostr.NIP19
   alias Nostr.Bech32

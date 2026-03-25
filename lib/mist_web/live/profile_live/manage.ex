@@ -1,5 +1,8 @@
 defmodule MistWeb.ProfileLive.Manage do
   use MistWeb, :live_view
+
+  on_mount {MistWeb.LiveIdentity, :require_identity}
+
   alias Mist.{Profile, Nostr.Keys, Nostr.Signer}
 
   @impl true

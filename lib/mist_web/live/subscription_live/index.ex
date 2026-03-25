@@ -1,6 +1,8 @@
 defmodule MistWeb.SubscriptionLive.Index do
   use MistWeb, :live_view
 
+  on_mount {MistWeb.LiveIdentity, :require_identity}
+
   alias Mist.Notes
   alias Mist.Nostr.Dispatcher
   alias NostrEx.RelayManager

@@ -1,6 +1,8 @@
 defmodule MistWeb.ProfileLive.ManageFollows do
   use MistWeb, :live_view
 
+  on_mount {MistWeb.LiveIdentity, :require_identity}
+
   alias Mist.{Profile, Nostr.Keys}
 
   @impl true

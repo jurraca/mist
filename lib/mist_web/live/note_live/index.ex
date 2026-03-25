@@ -1,6 +1,8 @@
 defmodule MistWeb.NoteLive.Index do
   use MistWeb, :live_view
 
+  on_mount {MistWeb.LiveIdentity, :require_identity}
+
   alias Mist.Nostr.{Dispatcher, Event, Keys}
   alias Mist.Notes
   alias Mist.Profile

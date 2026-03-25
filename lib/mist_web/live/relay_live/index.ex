@@ -1,6 +1,8 @@
 defmodule MistWeb.RelayLive.Index do
   use MistWeb, :live_view
 
+  on_mount {MistWeb.LiveIdentity, :require_identity}
+
   require Logger
 
   alias Mist.Relay

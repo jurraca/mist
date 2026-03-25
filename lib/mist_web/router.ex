@@ -17,9 +17,8 @@ defmodule MistWeb.Router do
   scope "/", MistWeb do
     pipe_through :browser
 
-    live "/welcome", WelcomeLive, :index
-
-    live_session :require_identity, on_mount: [{MistWeb.LiveIdentity, :require_identity}] do
+    live_session :app do
+      live "/welcome", WelcomeLive, :index
       live "/", NoteLive.Index, :index
       live "/relays", RelayLive.Index, :index
       live "/relays/new", RelayLive.Index, :new

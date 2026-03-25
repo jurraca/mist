@@ -1,6 +1,8 @@
 defmodule MistWeb.UserProfile.Index do
   use MistWeb, :live_view
 
+  on_mount {MistWeb.LiveIdentity, :require_identity}
+
   alias Mist.{Profile, Nostr.Signer}
 
   @impl true
