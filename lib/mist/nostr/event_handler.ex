@@ -54,7 +54,7 @@ defmodule Mist.Nostr.EventHandler do
            conflict_target: [:event_id]
          ) do
       {:ok, %{id: id}} when not is_nil(id) ->
-        persist_e_tags(id, event.tags)
+        persist_tags(id, event.tags)
 
       {:ok, _} -> :ok
       {:error, changeset} ->
@@ -111,16 +111,15 @@ defmodule Mist.Nostr.EventHandler do
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
   end
 
-  defp persist_e_tags(db_event_id, tags) do
-    e_tags =
+  defp persist_tags(db_event_id, tags) do
+    rows =
       tags
-      |> Enum.filter(fn tag -> tag.type == "e" end)
       |> Enum.map(fn tag ->
         %{event_id: db_event_id, key: tag.type, value: tag.data, rest: tag.info || []}
       end)
 
-    if e_tags != [] do
-      Mist.Repo.insert_all("tags", e_tags, on_conflict: :nothing)
+    if rows != [] do
+      Mist.Repo.insert_all("tags", rows, on_conflict: :nothing)
     end
   end
 
