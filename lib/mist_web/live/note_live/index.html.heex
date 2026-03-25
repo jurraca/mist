@@ -203,12 +203,26 @@
 </div>
 
 <.modal :if={@live_action in [:new]} id="note-modal" show on_cancel={JS.patch(~p"/notes")}>
-  <.live_component
-    module={MistWeb.NoteLive.FormComponent}
-    id={:new}
-    title={@page_title}
-    action={@live_action}
-    note={%Event{}}
-    patch={~p"/notes"}
-  />
+  <%= if @has_local_keypair do %>
+    <.live_component
+      module={MistWeb.NoteLive.FormComponent}
+      id={:new}
+      title={@page_title}
+      action={@live_action}
+      note={%Event{}}
+      patch={~p"/notes"}
+    />
+  <% else %>
+    <div class="p-6 text-center space-y-4">
+      <.icon name="hero-lock-closed" class="w-12 h-12 text-text-muted mx-auto" />
+      <h3 class="text-lg font-semibold text-text-primary">Read-only mode</h3>
+      <p class="text-text-secondary text-sm">
+        No private key configured. Publishing notes requires a private key set via the
+        <code class="text-neon-green">NOSTR_PRIVKEY</code> environment variable.
+      </p>
+      <.link patch={~p"/notes"} class="inline-block mt-2 text-sm text-text-muted hover:text-neon-green transition-colors">
+        Go back
+      </.link>
+    </div>
+  <% end %>
 </.modal>

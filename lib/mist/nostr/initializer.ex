@@ -29,6 +29,14 @@ defmodule Mist.Nostr.Initializer do
     GenServer.start_link(__MODULE__, %{retries: 0}, name: __MODULE__)
   end
 
+  @doc """
+  Re-run the bootstrap fetch for an explicit pubkey at runtime (e.g. after identity switch).
+  Runs synchronously in the calling process — call via Task.Supervisor.start_child/2.
+  """
+  def bootstrap(pubkey) when is_binary(pubkey) do
+    run_bootstrap(pubkey)
+  end
+
   @impl GenServer
   def init(state) do
     {:ok, state, {:continue, :check_signer}}

@@ -1,10 +1,4 @@
-<div :if={!@has_local_keypair} class="mx-auto max-w-4xl p-8">
-  <div class="bg-dark-secondary border border-dark-border rounded-lg p-6">
-    <p class="text-text-muted">Please configure your private key to manage follows.</p>
-  </div>
-</div>
-
-<div :if={@has_local_keypair} class="mx-auto max-w-6xl">
+<div class="mx-auto max-w-6xl">
   <.header>
     <span class="text-neon-green">Manage Follows</span>
     <:subtitle>
@@ -12,6 +6,7 @@
     </:subtitle>
     <:actions>
       <button
+        :if={@has_local_keypair}
         phx-click="publish_follow_list"
         class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:scale-105"
       >
@@ -20,7 +15,14 @@
     </:actions>
   </.header>
 
-  <div class="bg-dark-secondary border border-dark-border rounded-lg p-4 mt-8">
+  <div :if={!@has_local_keypair} class="mt-4 p-4 bg-dark-secondary border border-neon-green/30 rounded-lg">
+    <p class="text-neon-green font-medium text-sm">Read-only mode — no private key configured</p>
+    <p class="text-text-secondary text-sm mt-1">
+      You can browse your follows, but write actions (adding/removing follows, publishing follow list) require a private key.
+    </p>
+  </div>
+
+  <div :if={@has_local_keypair} class="bg-dark-secondary border border-dark-border rounded-lg p-4 mt-8">
     <h3 class="text-lg font-semibold text-text-primary mb-3">Add a Follow</h3>
     <form phx-submit="add_follow" class="flex gap-3 items-start">
       <div class="flex-1">
@@ -50,7 +52,7 @@
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-lg font-semibold text-text-primary">Your Follows ({length(@follows)})</h3>
           
-          <div :if={MapSet.size(@selected_follows) > 0} class="flex items-center gap-2">
+          <div :if={@has_local_keypair && MapSet.size(@selected_follows) > 0} class="flex items-center gap-2">
             <span class="text-sm text-text-muted">{MapSet.size(@selected_follows)} selected</span>
             <select
               phx-change="add_to_list"
@@ -69,6 +71,7 @@
             class="flex items-center gap-3 p-3 bg-dark-primary rounded-lg hover:bg-dark-tertiary transition-colors"
           >
             <input
+              :if={@has_local_keypair}
               type="checkbox"
               phx-click="toggle_select"
               phx-value-follow_id={follow.follow_id}
@@ -98,6 +101,7 @@
             </div>
 
             <button
+              :if={@has_local_keypair}
               phx-click="toggle_visibility"
               phx-value-follow_id={follow.follow_id}
               class="px-3 py-1 text-sm rounded border border-dark-border hover:bg-dark-tertiary transition-colors"
@@ -109,6 +113,8 @@
             </button>
           </div>
         </div>
+
+        <p :if={@follows == []} class="text-text-muted text-sm text-center py-4">No follows yet.</p>
       </div>
     </div>
 
@@ -118,7 +124,7 @@
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-lg font-semibold text-text-primary">Custom Lists</h3>
           <button
-            :if={!@show_new_list_form}
+            :if={@has_local_keypair && !@show_new_list_form}
             phx-click="show_new_list_form"
             class="p-1 rounded hover:bg-dark-tertiary transition-colors"
           >
@@ -126,7 +132,7 @@
           </button>
         </div>
 
-        <div :if={@show_new_list_form} class="mb-4 p-3 bg-dark-primary rounded-lg">
+        <div :if={@has_local_keypair && @show_new_list_form} class="mb-4 p-3 bg-dark-primary rounded-lg">
           <form phx-submit="create_list" class="space-y-3">
             <div>
               <input
@@ -183,6 +189,7 @@
                 <span class="font-medium text-text-primary">{list.name}</span>
               </div>
               <button
+                :if={@has_local_keypair}
                 phx-click="delete_list"
                 phx-value-list_id={list.id}
                 data-confirm="Delete this list?"
@@ -194,6 +201,8 @@
             <p :if={list.description} class="text-xs text-text-muted">{list.description}</p>
           </div>
         </div>
+
+        <p :if={@lists == []} class="text-text-muted text-sm text-center py-4">No lists yet.</p>
       </div>
     </div>
   </div>

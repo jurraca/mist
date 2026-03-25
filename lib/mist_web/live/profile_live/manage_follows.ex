@@ -29,11 +29,50 @@ defmodule MistWeb.ProfileLive.ManageFollows do
          )}
 
       {:error, _reason} ->
-        {:ok, assign(socket, has_local_keypair: false)}
+        case :persistent_term.get(:my_profile_pubkey, nil) do
+          nil ->
+            {:ok,
+             assign(socket,
+               has_local_keypair: false,
+               pubkey: nil,
+               profile: nil,
+               follows: [],
+               lists: [],
+               selected_follows: MapSet.new(),
+               show_new_list_form: false,
+               new_list_form: to_form(%{"name" => "", "description" => "", "color" => "#10b981"}),
+               follow_input: "",
+               follow_input_error: nil
+             )}
+
+          pubkey ->
+            {:ok, profile} = Profile.get_or_create_profile(pubkey)
+            follows = Profile.get_follows_with_privacy(profile.id)
+            lists = Profile.get_follow_lists(profile.id)
+
+            {:ok,
+             socket
+             |> assign(
+               pubkey: pubkey,
+               profile: profile,
+               follows: follows,
+               lists: lists,
+               selected_follows: MapSet.new(),
+               show_new_list_form: false,
+               new_list_form: to_form(%{"name" => "", "description" => "", "color" => "#10b981"}),
+               has_local_keypair: false,
+               follow_input: "",
+               follow_input_error: nil
+             )}
+        end
     end
   end
 
   @impl true
+  def handle_event("toggle_visibility", _params, %{assigns: %{has_local_keypair: false}} = socket) do
+    {:noreply, put_flash(socket, :error, "Read-only mode — no private key configured")}
+  end
+
   def handle_event("toggle_visibility", %{"follow_id" => follow_id}, socket) do
     follow_id = String.to_integer(follow_id)
 
@@ -68,6 +107,10 @@ defmodule MistWeb.ProfileLive.ManageFollows do
   end
 
   @impl true
+  def handle_event("show_new_list_form", _params, %{assigns: %{has_local_keypair: false}} = socket) do
+    {:noreply, put_flash(socket, :error, "Read-only mode — no private key configured")}
+  end
+
   def handle_event("show_new_list_form", _params, socket) do
     {:noreply, assign(socket, show_new_list_form: true)}
   end
@@ -81,6 +124,10 @@ defmodule MistWeb.ProfileLive.ManageFollows do
   end
 
   @impl true
+  def handle_event("create_list", _params, %{assigns: %{has_local_keypair: false}} = socket) do
+    {:noreply, put_flash(socket, :error, "Read-only mode — no private key configured")}
+  end
+
   def handle_event("create_list", %{"name" => name, "description" => description, "color" => color}, socket) do
     case Profile.create_follow_list(socket.assigns.profile.id, %{
            name: name,
@@ -101,6 +148,10 @@ defmodule MistWeb.ProfileLive.ManageFollows do
   end
 
   @impl true
+  def handle_event("delete_list", _params, %{assigns: %{has_local_keypair: false}} = socket) do
+    {:noreply, put_flash(socket, :error, "Read-only mode — no private key configured")}
+  end
+
   def handle_event("delete_list", %{"list_id" => list_id}, socket) do
     list_id = String.to_integer(list_id)
 
@@ -117,6 +168,10 @@ defmodule MistWeb.ProfileLive.ManageFollows do
   end
 
   @impl true
+  def handle_event("add_to_list", _params, %{assigns: %{has_local_keypair: false}} = socket) do
+    {:noreply, put_flash(socket, :error, "Read-only mode — no private key configured")}
+  end
+
   def handle_event("add_to_list", %{"list_id" => list_id}, socket) do
     list_id = String.to_integer(list_id)
 
@@ -136,6 +191,10 @@ defmodule MistWeb.ProfileLive.ManageFollows do
   end
 
   @impl true
+  def handle_event("add_follow", _params, %{assigns: %{has_local_keypair: false}} = socket) do
+    {:noreply, put_flash(socket, :error, "Read-only mode — no private key configured")}
+  end
+
   def handle_event("add_follow", %{"follow_input" => input}, socket) do
     case Keys.decode_pubkey_input(input) do
       {:ok, hex_pubkey} ->
@@ -170,6 +229,10 @@ defmodule MistWeb.ProfileLive.ManageFollows do
   end
 
   @impl true
+  def handle_event("publish_follow_list", _params, %{assigns: %{has_local_keypair: false}} = socket) do
+    {:noreply, put_flash(socket, :error, "Read-only mode — no private key configured")}
+  end
+
   def handle_event("publish_follow_list", _params, socket) do
     case Profile.publish_public_follow_list(socket.assigns.pubkey) do
       {:ok, _event} ->
@@ -179,4 +242,12 @@ defmodule MistWeb.ProfileLive.ManageFollows do
         {:noreply, put_flash(socket, :error, "Failed to publish: #{inspect(reason)}")}
     end
   end
+
+  @impl true
+  def handle_info({:identity_switched, _pubkey}, socket) do
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
+  @impl true
+  def handle_info(_, socket), do: {:noreply, socket}
 end

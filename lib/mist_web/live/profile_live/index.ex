@@ -94,6 +94,11 @@ defmodule MistWeb.ProfileLive.Index do
   end
 
   @impl true
+  def handle_info({:identity_switched, _pubkey}, socket) do
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
+  @impl true
   def handle_info(_, socket), do: {:noreply, socket}
 
   defp search(%{pubkey: pubkey, relays: relays} = profile_data) when relays != [] do

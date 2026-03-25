@@ -16,20 +16,31 @@
   </div>
 
   <div
-    :if={!@has_local_keypair}
-    class="mt-4 p-4 bg-dark-secondary border border-yellow-300 rounded-lg"
+    :if={!@has_local_keypair && @pubkey}
+    class="mt-4 p-4 bg-dark-secondary border border-neon-green/30 rounded-lg"
   >
-    <p class="text-black-800 font-medium">No local keypair found.</p>
-    <p class="text-sm text-black-800 mt-1">Would you like me to generate one for you?</p>
-    <button
-      phx-click="generate_keypair"
-      class="mt-3 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-    >
-      Generate Keypair
-    </button>
+    <p class="text-neon-green font-medium text-sm">Read-only mode — no private key configured</p>
+    <p class="text-text-secondary text-sm mt-1">
+      Viewing profile for:
+      <code class="text-xs bg-dark-tertiary px-2 py-1 rounded text-text-muted break-all"><%= @pubkey %></code>
+    </p>
+    <p class="text-text-muted text-xs mt-2">
+      To edit and publish your profile, configure <code class="text-neon-green">NOSTR_PRIVKEY</code>.
+    </p>
   </div>
 
-  <.simple_form for={@form} phx-submit="save" class="mt-8">
+  <div
+    :if={!@has_local_keypair && !@pubkey}
+    class="mt-4 p-4 bg-dark-secondary border border-dark-border rounded-lg"
+  >
+    <p class="text-text-muted font-medium">No identity configured.</p>
+    <p class="text-sm text-text-muted mt-1">
+      <.link navigate={~p"/welcome"} class="text-neon-green hover:underline">Set your identity</.link>
+      to get started.
+    </p>
+  </div>
+
+  <.simple_form :if={@has_local_keypair} for={@form} phx-submit="save" class="mt-8">
     <.input field={@form["name"]} label="Name" type="text" />
     <.input field={@form["about"]} label="About" type="textarea" />
     <.input field={@form["picture"]} label="Picture URL" type="url" />

@@ -22,4 +22,12 @@ defmodule MistWeb.ProfileLive.Show do
      |> assign(:profile, profile)
      |> assign(:display_name, display_name)}
   end
+
+  @impl true
+  def handle_info({:identity_switched, _pubkey}, socket) do
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
+  @impl true
+  def handle_info(_, socket), do: {:noreply, socket}
 end

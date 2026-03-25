@@ -1,6 +1,6 @@
 defmodule Mist.Nostr.Signer do
   use GenServer
-  alias Mist.Nostr.Keys
+  alias Mist.Nostr.{Keys, Identity}
   alias Mist.Profile
   require Logger
 
@@ -49,6 +49,7 @@ defmodule Mist.Nostr.Signer do
         {:noreply, state}
 
       _ ->
+        Identity.load_from_db()
         {:noreply, state}
     end
   end

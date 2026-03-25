@@ -27,20 +27,28 @@ defmodule MistWeb.ProfileLive.Manage do
          )}
 
       {:error, _reason} ->
+        {pubkey, profile} =
+          case :persistent_term.get(:my_profile_pubkey, nil) do
+            nil -> {nil, nil}
+            pk ->
+              {:ok, p} = Profile.get_or_create_profile(pk)
+              {pk, p}
+          end
+
         {:ok,
          assign(socket,
-           pubkey: nil,
-           profile: nil,
+           pubkey: pubkey,
+           profile: profile,
            has_local_keypair: false,
            form:
              to_form(%{
-               "name" => "",
-               "about" => "",
-               "picture" => "",
-               "display_name" => "",
-               "website" => "",
-               "banner" => "",
-               "bot" => false
+               "name" => (profile && profile.name) || "",
+               "about" => (profile && profile.about) || "",
+               "picture" => (profile && profile.picture) || "",
+               "display_name" => (profile && profile.display_name) || "",
+               "website" => (profile && profile.website) || "",
+               "banner" => (profile && profile.banner) || "",
+               "bot" => (profile && profile.bot) || false
              })
          )}
     end
@@ -121,4 +129,12 @@ defmodule MistWeb.ProfileLive.Manage do
       {:noreply, put_flash(socket, :error, "No private key found. Please configure your private key to create a profile.")}
     end
   end
+
+  @impl true
+  def handle_info({:identity_switched, _pubkey}, socket) do
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
+  @impl true
+  def handle_info(_, socket), do: {:noreply, socket}
 end

@@ -115,4 +115,12 @@ defmodule MistWeb.SubscriptionLive.Index do
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
   end
+
+  @impl true
+  def handle_info({:identity_switched, _pubkey}, socket) do
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
+  @impl true
+  def handle_info(_, socket), do: {:noreply, socket}
 end

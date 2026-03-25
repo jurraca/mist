@@ -1,7 +1,7 @@
 defmodule MistWeb.NoteLive.Index do
   use MistWeb, :live_view
 
-  alias Mist.Nostr.{Dispatcher, Event}
+  alias Mist.Nostr.{Dispatcher, Event, Keys}
   alias Mist.Notes
   alias Mist.Profile
   alias MistWeb.NoteLive.GraphUpdater
@@ -32,6 +32,8 @@ defmodule MistWeb.NoteLive.Index do
 
     initial_graph = GraphUpdater.from_notes(stored_notes)
 
+    has_local_keypair = match?({:ok, _}, Keys.get_private_key())
+
     socket =
       socket
       |> stream(:notes, stored_notes)
@@ -46,6 +48,7 @@ defmodule MistWeb.NoteLive.Index do
       |> assign(:selected_list, nil)
       |> assign(:pending_graph_updates, [])
       |> assign(:batch_timer_ref, nil)
+      |> assign(:has_local_keypair, has_local_keypair)
       |> assign(:notes_empty_message, empty_state_message(%{subscription_filter: :following, follow_pubkeys: follow_pubkeys, hashtag_filter: "", selected_relay: nil}, stored_notes))
 
     socket =
@@ -102,6 +105,11 @@ defmodule MistWeb.NoteLive.Index do
   @impl true
   def handle_info({MistWeb.NoteLive.FormComponent, {:saved, note}}, socket) do
     {:noreply, stream_insert(socket, :notes, note, at: 0)}
+  end
+
+  @impl true
+  def handle_info({:identity_switched, _pubkey}, socket) do
+    {:noreply, push_navigate(socket, to: "/")}
   end
 
   @impl true

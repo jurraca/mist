@@ -40,10 +40,18 @@ The application uses SQLite as the primary database through:
 - **Phoenix PubSub**: Inter-process message broadcasting for Nostr event distribution
 - **LiveView Hooks**: JavaScript integration for interactive components like the network graph
 
+## Identity Management
+- **Read-only Identity**: Users can set a public key (npub or hex) without a private key via `/welcome`
+- **Settings Table**: Key/value store in SQLite (`Mist.Settings`) persists the active pubkey across restarts
+- **Identity Module** (`Mist.Nostr.Identity`): Handles identity switching — decodes npub, updates persistent_term, broadcasts PubSub, triggers bootstrap
+- **LiveIdentity Hook** (`MistWeb.LiveIdentity`): on_mount guard redirecting to `/welcome` when no pubkey is configured; broadcasts identity changes to all live views
+- **Welcome/Switcher LiveView**: `/welcome` route for first-run setup and identity switching
+
 ## Security and Authentication
 - **Cryptographic Support**: Secp256k1 library for Nostr key operations and message signing
 - **Bech32 Encoding**: Support for Nostr's address format requirements
-- **Private Key Management**: Environment-based configuration for user identity
+- **Private Key Management**: Environment-based configuration for user identity (`NOSTR_PRIVKEY`)
+- **Read-only Mode**: Write-action gating in NoteLive.Index, ProfileLive.Manage, and ProfileLive.ManageFollows when no private key is configured
 
 # External Dependencies
 

@@ -62,6 +62,14 @@ defmodule MistWeb.RelayLive.Index do
     {:noreply, refresh_relay_assigns(socket)}
   end
 
+  @impl true
+  def handle_info({:identity_switched, _pubkey}, socket) do
+    {:noreply, push_navigate(socket, to: "/")}
+  end
+
+  @impl true
+  def handle_info(_, socket), do: {:noreply, socket}
+
   defp apply_action(socket, :new, _params) do
     socket
     |> assign(:page_title, "New Relay")

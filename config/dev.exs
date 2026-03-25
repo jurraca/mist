@@ -15,7 +15,7 @@ config :mist, Mist.Repo,
 # to bundle .js and .css sources.
 config :mist, MistWeb.Endpoint,
   # Binding to all interfaces to allow access from Replit proxy
-  http: [ip: {0, 0, 0, 0}, port: 4000],
+  http: [ip: {0, 0, 0, 0}, port: 5000],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
