@@ -112,6 +112,7 @@ defmodule MistWeb.CoreComponents do
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+      phx-hook={if @kind == :info, do: "AutoDismissFlash"}
       role="alert"
       class={[
         "fixed top-4 right-4 w-80 sm:w-96 z-50 rounded-lg p-4 ring-1 shadow-lg transition-all duration-300",

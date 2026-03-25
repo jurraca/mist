@@ -114,6 +114,17 @@ Hooks.NoteCountUpdater = {
   }
 }
 
+Hooks.AutoDismissFlash = {
+  mounted() {
+    this.timer = setTimeout(() => {
+      this.el.click()
+    }, 3000)
+  },
+  destroyed() {
+    if (this.timer) clearTimeout(this.timer)
+  }
+}
+
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
