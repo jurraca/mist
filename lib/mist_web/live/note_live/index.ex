@@ -21,9 +21,7 @@ defmodule MistWeb.NoteLive.Index do
       case Profile.get_my_profile() do
         {:ok, profile} ->
           lists = Profile.get_follow_lists(profile.id)
-          pubkeys =
-            Profile.get_follows_with_privacy(profile.id)
-            |> Enum.map(& &1.profile.pubkey)
+          pubkeys = Enum.map(profile.following, & &1.pubkey)
           {lists, pubkeys}
 
         _ ->
@@ -48,6 +46,7 @@ defmodule MistWeb.NoteLive.Index do
       |> assign(:follow_lists, follow_lists)
       |> assign(:follow_pubkeys, follow_pubkeys)
       |> assign(:selected_list, nil)
+      |> assign(:list_pubkeys, [])
       |> assign(:pending_graph_updates, [])
       |> assign(:batch_timer_ref, nil)
       |> assign(:has_local_keypair, has_local_keypair)
@@ -146,11 +145,13 @@ defmodule MistWeb.NoteLive.Index do
       String.starts_with?(filter, "list:") ->
         [_, list_id] = String.split(filter, ":")
         list_id = String.to_integer(list_id)
+        list_pubkeys = Profile.get_pubkeys_in_list(list_id)
 
         socket =
           socket
           |> assign(:subscription_filter, {:list, list_id})
           |> assign(:selected_list, list_id)
+          |> assign(:list_pubkeys, list_pubkeys)
           |> clear_ui_state()
           |> reload_notes_for_filter()
 
@@ -219,7 +220,7 @@ defmodule MistWeb.NoteLive.Index do
     notes =
       case socket.assigns.subscription_filter do
         :following    -> Notes.list_recent_by_pubkeys(socket.assigns.follow_pubkeys)
-        {:list, id}   -> Notes.list_recent_by_pubkeys(Profile.get_pubkeys_in_list(id))
+        {:list, _id}  -> Notes.list_recent_by_pubkeys(socket.assigns.list_pubkeys)
         :hashtag      -> Notes.list_recent_by_hashtag(socket.assigns.hashtag_filter)
         _             -> Notes.list_recent()
       end
@@ -307,8 +308,8 @@ defmodule MistWeb.NoteLive.Index do
           :skip
         end
 
-      {:list, list_id} ->
-        pubkeys = Profile.get_pubkeys_in_list(list_id)
+      {:list, _list_id} ->
+        pubkeys = assigns.list_pubkeys
 
         if pubkeys == [] do
           :skip

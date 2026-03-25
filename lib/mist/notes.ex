@@ -97,16 +97,24 @@ defmodule Mist.Notes do
   def list_recent_by_hashtag(tag) do
     clean = tag |> String.trim() |> String.downcase() |> String.replace(~r/^#/, "")
 
+    id_subquery =
+      from(e in Event,
+        join: t in assoc(e, :tags),
+        where: e.kind == 1 and t.key == "t" and t.value == ^clean,
+        group_by: [e.id, e.created_at],
+        order_by: [desc: e.created_at],
+        limit: 50,
+        select: e.id
+      )
+
     from(e in Event,
       join: t in assoc(e, :tags),
-      where: e.kind == 1 and t.key == "t" and t.value == ^clean,
+      where: e.id in subquery(id_subquery),
       order_by: [desc: e.created_at],
-      limit: 100
+      preload: [tags: t]
     )
     |> Mist.Repo.all()
     |> Enum.uniq_by(& &1.id)
-    |> Enum.take(50)
-    |> Mist.Repo.preload(:tags)
     |> assemble_notes()
   end
 
