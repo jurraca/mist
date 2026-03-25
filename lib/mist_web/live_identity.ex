@@ -22,8 +22,4 @@ defmodule MistWeb.LiveIdentity do
         {:cont, socket}
     end
   end
-
-  def handle_info({:identity_switched, _pubkey}, socket) do
-    {:noreply, push_navigate(socket, to: "/")}
-  end
 end
