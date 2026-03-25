@@ -6,7 +6,7 @@
   <div class="bg-dark-secondary border border-dark-border shadow rounded-lg p-6">
     <h3 class="text-lg font-medium mb-4 text-neon-purple">Create Subscription</h3>
 
-    <div class="space-y-4">
+    <form phx-change="update_filters" phx-submit="subscribe" class="space-y-4">
       <div>
         <label class="block text-sm font-medium text-text-secondary mb-1">Relay</label>
         <select
@@ -31,7 +31,6 @@
           type="text"
           name="kinds"
           value={@kinds}
-          phx-blur="update_filters"
           placeholder="1, 6, 7"
           class="block w-full rounded-md border-dark-border bg-dark-tertiary text-text-primary shadow-sm focus:border-neon-green focus:ring-neon-green"
         />
@@ -46,7 +45,6 @@
           type="text"
           name="authors"
           value={@authors}
-          phx-blur="update_filters"
           placeholder="pubkey1, pubkey2"
           class="block w-full rounded-md border-dark-border bg-dark-tertiary text-text-primary shadow-sm focus:border-neon-green focus:ring-neon-green"
         />
@@ -58,7 +56,6 @@
           type="text"
           name="hashtag"
           value={@hashtag}
-          phx-blur="update_filters"
           placeholder="nostr"
           class="block w-full rounded-md border-dark-border bg-dark-tertiary text-text-primary shadow-sm focus:border-neon-green focus:ring-neon-green"
         />
@@ -66,19 +63,20 @@
 
       <div class="flex gap-4 pt-4">
         <button
-          phx-click="subscribe"
+          type="submit"
           class="inline-flex justify-center rounded-md bg-neon-green px-4 py-2 text-sm font-semibold text-dark-primary shadow-sm hover:bg-opacity-80 transition-all"
         >
           Subscribe
         </button>
         <button
+          type="button"
           phx-click="cancel_all"
           class="inline-flex justify-center rounded-md border border-red-600 px-4 py-2 text-sm font-semibold text-red-600 shadow-sm hover:bg-red-600 hover:text-white transition-all"
         >
           Cancel All Subscriptions
         </button>
       </div>
-    </div>
+    </form>
   </div>
 
   <div class="bg-dark-secondary border border-dark-border shadow rounded-lg p-6">

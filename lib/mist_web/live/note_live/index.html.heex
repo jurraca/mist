@@ -4,12 +4,11 @@
     <:actions>
       <div class="flex items-center gap-4 flex-wrap">
         <!-- Subscription Filter Dropdown -->
-        <div class="flex items-center gap-2">
+        <form phx-change="change_subscription_filter" class="flex items-center gap-2">
           <label class="text-xs font-medium text-text-muted uppercase tracking-wider">
             Source
           </label>
           <select 
-            phx-change="change_subscription_filter" 
             name="filter"
             class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
           >
@@ -27,12 +26,11 @@
             </optgroup>
             <option value="hashtag" selected={@subscription_filter == :hashtag}>Hashtag</option>
           </select>
-        </div>
+        </form>
 
         <!-- Relay Selector (shown when single_relay is selected) -->
-        <div :if={@subscription_filter == :single_relay} class="flex items-center gap-2">
+        <form :if={@subscription_filter == :single_relay} phx-change="change_relay" class="flex items-center gap-2">
           <select 
-            phx-change="change_relay" 
             name="relay_url"
             class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
           >
@@ -41,12 +39,11 @@
               {relay_url}
             </option>
           </select>
-        </div>
+        </form>
 
         <!-- Hashtag Input (shown when hashtag is selected) -->
-        <div :if={@subscription_filter == :hashtag} class="flex items-center gap-2">
+        <form :if={@subscription_filter == :hashtag} phx-change="change_hashtag" class="flex items-center gap-2">
           <input 
-            phx-change="change_hashtag"
             phx-debounce="500"
             name="hashtag"
             type="text"
@@ -54,7 +51,7 @@
             value={@hashtag_filter}
             class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green w-32"
           />
-        </div>
+        </form>
 
         <!-- View Mode Toggle -->
         <div class="flex bg-dark-tertiary rounded-lg p-1">

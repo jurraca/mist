@@ -54,14 +54,15 @@
           
           <div :if={@has_local_keypair && MapSet.size(@selected_follows) > 0} class="flex items-center gap-2">
             <span class="text-sm text-text-muted">{MapSet.size(@selected_follows)} selected</span>
-            <select
-              phx-change="add_to_list"
-              name="list_id"
-              class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
-            >
-              <option value="">Add to list...</option>
-              <option :for={list <- @lists} value={list.id}>{list.name}</option>
-            </select>
+            <form phx-change="add_to_list">
+              <select
+                name="list_id"
+                class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+              >
+                <option value="">Add to list...</option>
+                <option :for={list <- @lists} value={list.id}>{list.name}</option>
+              </select>
+            </form>
           </div>
         </div>
 
