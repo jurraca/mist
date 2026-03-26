@@ -114,24 +114,17 @@ defmodule Mist.Nostr.SubscriptionPlanner do
     current = Map.get(state.relay_pubkeys, relay_url, MapSet.new())
     new_pubkeys = Enum.reject(pubkeys, &MapSet.member?(current, &1))
 
-    if new_pubkeys == [] do
-      state
+    with true <- new_pubkeys != [],
+         {:ok, _} <- Relay.maybe_connect_relays([relay_url]),
+         :ok <- send_sub(relay_url, new_pubkeys) do
+      updated = MapSet.union(current, MapSet.new(new_pubkeys))
+      %{state | relay_pubkeys: Map.put(state.relay_pubkeys, relay_url, updated)}
     else
-      case Relay.maybe_connect_relays([relay_url]) do
-        {:ok, _} ->
-          case send_sub(relay_url, new_pubkeys) do
-            :ok ->
-              updated = MapSet.union(current, MapSet.new(new_pubkeys))
-              %{state | relay_pubkeys: Map.put(state.relay_pubkeys, relay_url, updated)}
-
-            :error ->
-              state
-          end
-
-        {:error, reason} ->
-          Logger.warning("SubscriptionPlanner: could not connect to #{relay_url}: #{inspect(reason)}")
-          state
-      end
+      false -> state
+      {:error, reason} ->
+        Logger.warning("SubscriptionPlanner: could not connect to #{relay_url}: #{inspect(reason)}")
+        state
+      :error -> state
     end
   end
 
