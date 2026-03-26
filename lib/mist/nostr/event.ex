@@ -27,11 +27,11 @@ defmodule Mist.Nostr.Event do
   @doc false
   def changeset(event, attrs) do
     attrs =
-      Map.update(attrs, :created_at, fn dt ->
+      Map.update!(attrs, :created_at, fn dt ->
         if is_integer(dt) do
           dt
         else
-          DateTime.to_unix!(dt)
+          DateTime.to_unix(dt)
         end
       end)
 

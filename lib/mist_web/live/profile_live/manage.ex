@@ -9,8 +9,18 @@ defmodule MistWeb.ProfileLive.Manage do
   def mount(_params, _session, socket) do
     has_local_keypair = match?({:ok, _}, Keys.get_private_key())
 
+    empty_form = to_form(%{
+      "name" => "",
+      "about" => "",
+      "picture" => "",
+      "display_name" => "",
+      "website" => "",
+      "banner" => "",
+      "bot" => false
+    })
+
     case Profile.get_my_profile() do
-      {:ok, profile} ->
+      {:ok, profile} when not is_nil(profile) ->
         {:ok,
          assign(socket,
            pubkey: profile.pubkey,
@@ -28,22 +38,13 @@ defmodule MistWeb.ProfileLive.Manage do
              })
          )}
 
-      {:error, _reason} ->
+      _ ->
         {:ok,
          assign(socket,
            pubkey: nil,
            profile: nil,
            has_local_keypair: has_local_keypair,
-           form:
-             to_form(%{
-               "name" => "",
-               "about" => "",
-               "picture" => "",
-               "display_name" => "",
-               "website" => "",
-               "banner" => "",
-               "bot" => false
-             })
+           form: empty_form
          )}
     end
   end
