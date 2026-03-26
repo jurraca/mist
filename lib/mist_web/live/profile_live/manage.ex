@@ -7,16 +7,15 @@ defmodule MistWeb.ProfileLive.Manage do
 
   @impl true
   def mount(_params, _session, socket) do
-    case Keys.get_private_key() do
-      {:ok, _priv_key} ->
-        {:ok, pubkey} = Keys.derive_public_key()
-        {:ok, profile} = Profile.get_or_create_profile(pubkey)
+    has_local_keypair = match?({:ok, _}, Keys.get_private_key())
 
+    case Profile.get_my_profile() do
+      {:ok, profile} ->
         {:ok,
          assign(socket,
-           pubkey: pubkey,
+           pubkey: profile.pubkey,
            profile: profile,
-           has_local_keypair: true,
+           has_local_keypair: has_local_keypair,
            form:
              to_form(%{
                "name" => profile.name || "",
@@ -30,28 +29,20 @@ defmodule MistWeb.ProfileLive.Manage do
          )}
 
       {:error, _reason} ->
-        {pubkey, profile} =
-          case :persistent_term.get(:my_profile_pubkey, nil) do
-            nil -> {nil, nil}
-            pk ->
-              {:ok, p} = Profile.get_or_create_profile(pk)
-              {pk, p}
-          end
-
         {:ok,
          assign(socket,
-           pubkey: pubkey,
-           profile: profile,
-           has_local_keypair: false,
+           pubkey: nil,
+           profile: nil,
+           has_local_keypair: has_local_keypair,
            form:
              to_form(%{
-               "name" => (profile && profile.name) || "",
-               "about" => (profile && profile.about) || "",
-               "picture" => (profile && profile.picture) || "",
-               "display_name" => (profile && profile.display_name) || "",
-               "website" => (profile && profile.website) || "",
-               "banner" => (profile && profile.banner) || "",
-               "bot" => (profile && profile.bot) || false
+               "name" => "",
+               "about" => "",
+               "picture" => "",
+               "display_name" => "",
+               "website" => "",
+               "banner" => "",
+               "bot" => false
              })
          )}
     end
