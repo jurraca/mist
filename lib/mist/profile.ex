@@ -143,8 +143,8 @@ defmodule Mist.Profile do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
       tag_data =
-        for %Nostr.Tag{type: "p", data: pubkey, info: info}
-            when is_binary(pubkey) and pubkey != "" <- new_follows do
+        for %Nostr.Tag{type: type, data: pubkey, info: info}
+            when type in [:p, "p"] and is_binary(pubkey) and pubkey != "" <- new_follows do
           relay =
             case info do
               [r | _] when is_binary(r) and r != "" -> r
@@ -635,6 +635,10 @@ defmodule Mist.Profile do
       nil -> {:error, :not_found}
       {list, count} -> {:ok, Map.put(list, :member_count, count)}
     end
+  end
+
+  defp parse_tag_url_purpose(%{data: url}) when url in [nil, ""] do
+    {:error, "empty relay URL in tag"}
   end
 
   defp parse_tag_url_purpose(%{data: relay_url, info: info}) do
