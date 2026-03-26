@@ -142,97 +142,57 @@ defmodule Mist.Profile do
     with {:ok, follower} <- get_or_create_profile(follower_pubkey) do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      p_tags =
-        Enum.filter(new_follows, fn tag ->
-          is_struct(tag, Nostr.Tag) and tag.type == "p" and is_binary(tag.data) and tag.data != ""
-        end)
-
-      pubkey_to_follow_attrs =
-        Map.new(p_tags, fn %Nostr.Tag{data: pubkey, info: info} ->
-          follow_attrs =
-            case info do
-              [_relay, petname | _] -> %{petname: petname}
-              _ -> %{}
-            end
-          {pubkey, follow_attrs}
-        end)
-
-      pubkeys = Map.keys(pubkey_to_follow_attrs)
-
-      existing_profiles =
-        if pubkeys == [] do
-          []
-        else
-          from(p in Profile, where: p.pubkey in ^pubkeys)
-          |> Repo.all()
-        end
-
-      existing_pubkeys = MapSet.new(existing_profiles, & &1.pubkey)
-
-      new_pubkeys = Enum.reject(pubkeys, &MapSet.member?(existing_pubkeys, &1))
-
-      pubkey_to_relay =
-        Map.new(p_tags, fn %Nostr.Tag{data: pubkey, info: info} ->
+      tag_data =
+        for %Nostr.Tag{type: "p", data: pubkey, info: info}
+            when is_binary(pubkey) and pubkey != "" <- new_follows do
           relay =
             case info do
               [r | _] when is_binary(r) and r != "" -> r
               _ -> nil
             end
-          {pubkey, relay}
-        end)
 
-      new_profile_rows =
-        Enum.map(new_pubkeys, fn pubkey ->
-          base = %{pubkey: pubkey, inserted_at: now, updated_at: now}
-          case Map.get(pubkey_to_relay, pubkey) do
-            nil -> base
-            relay -> Map.put(base, :relay, relay)
-          end
-        end)
+          petname =
+            case info do
+              [_, p | _] when is_binary(p) and p != "" -> p
+              _ -> nil
+            end
 
-      if new_profile_rows != [] do
-        Repo.insert_all(Profile, new_profile_rows, on_conflict: :nothing)
-      end
-
-      newly_inserted_profiles =
-        if new_pubkeys == [] do
-          []
-        else
-          from(p in Profile, where: p.pubkey in ^new_pubkeys)
-          |> Repo.all()
+          {pubkey, relay, petname}
         end
 
-      all_profiles = existing_profiles ++ newly_inserted_profiles
+      if tag_data == [] do
+        {:ok, []}
+      else
+        pubkeys = Enum.map(tag_data, &elem(&1, 0))
 
-      existing_profiles
-      |> Enum.filter(fn profile ->
-        incoming_relay = Map.get(pubkey_to_relay, profile.pubkey)
-        not is_nil(incoming_relay) and incoming_relay != profile.relay
-      end)
-      |> Enum.group_by(fn profile -> Map.get(pubkey_to_relay, profile.pubkey) end)
-      |> Enum.each(fn {relay_value, profiles} ->
-        pubkeys_to_update = Enum.map(profiles, & &1.pubkey)
-        from(p in Profile, where: p.pubkey in ^pubkeys_to_update)
-        |> Repo.update_all(set: [relay: relay_value, updated_at: now])
-      end)
+        profile_rows =
+          Enum.map(tag_data, fn {pubkey, relay, _petname} ->
+            base = %{pubkey: pubkey, inserted_at: now, updated_at: now}
+            if relay, do: Map.put(base, :relay, relay), else: base
+          end)
 
-      follow_list_attrs =
-        Enum.flat_map(all_profiles, fn profile ->
-          case Map.fetch(pubkey_to_follow_attrs, profile.pubkey) do
-            {:ok, follow_attrs} ->
-              [%{
-                follower_id: follower.id,
-                followed_id: profile.id,
-                petname: Map.get(follow_attrs, :petname),
-                inserted_at: now,
-                updated_at: now
-              }]
-            :error ->
-              []
+        Repo.insert_all(Profile, profile_rows, on_conflict: :nothing)
+
+        pubkey_to_id =
+          from(p in Profile, where: p.pubkey in ^pubkeys, select: {p.pubkey, p.id})
+          |> Repo.all()
+          |> Map.new()
+
+        follow_rows =
+          for {pubkey, _relay, petname} <- tag_data,
+              id = Map.get(pubkey_to_id, pubkey),
+              not is_nil(id) do
+            %{
+              follower_id: follower.id,
+              followed_id: id,
+              petname: petname,
+              inserted_at: now,
+              updated_at: now
+            }
           end
-        end)
 
-      Repo.insert_all(Follows, follow_list_attrs, on_conflict: :nothing)
+        Repo.insert_all(Follows, follow_rows, on_conflict: :nothing)
+      end
     end
   end
 
