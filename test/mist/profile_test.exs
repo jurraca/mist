@@ -354,8 +354,15 @@ defmodule Mist.ProfileTest do
       url = "wss://dup-relay.example.com"
       tags = [%{data: url, info: ["read"]}, %{data: url, info: ["write"]}]
       Profile.add_user_relays(pubkey, tags)
-      relays = Profile.get_user_relays(pubkey)
-      assert length(relays) == 1
+
+      relay_count =
+        Repo.one(from r in Mist.Relay.Info, where: r.url == ^url, select: count(r.id))
+
+      user_relay_count =
+        Repo.one(from ur in Mist.Profile.UserRelays, where: ur.pubkey == ^pubkey, select: count(ur.id))
+
+      assert relay_count == 1
+      assert user_relay_count == 1
     end
   end
 
@@ -482,6 +489,15 @@ defmodule Mist.ProfileTest do
       assert length(follows) == 1
       [follow] = follows
       assert follow.petname == "first"
+    end
+
+    test "tag with nil data is skipped by the is_binary guard" do
+      follower = profile_fixture()
+      tag = %Nostr.Tag{type: :p, data: nil, info: []}
+
+      Profile.add_follow_list(follower.pubkey, [tag])
+
+      assert Repo.all(from f in Mist.Profile.Follows, where: f.follower_id == ^follower.id) == []
     end
 
     test "tag with empty string data is ignored" do
