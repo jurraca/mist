@@ -42,7 +42,7 @@ defmodule Mist.Nostr.EventHandler do
     attrs = %{
       event_id: event.id,
       pubkey: event.pubkey,
-      created_at: DateTime.from_unix!(event.created_at),
+      created_at: event.created_at,
       kind: event.kind,
       content: event.content,
       sig: event.sig

@@ -26,6 +26,15 @@ defmodule Mist.Nostr.Event do
 
   @doc false
   def changeset(event, attrs) do
+    attrs =
+      Map.update(attrs, :created_at, fn dt ->
+        if is_integer(dt) do
+          dt
+        else
+          DateTime.to_unix!(dt)
+        end
+      end)
+
     event
     |> cast(attrs, [:event_id, :pubkey, :created_at, :kind, :content, :sig])
     |> validate_required([:event_id, :pubkey, :created_at, :kind, :content, :sig])
@@ -33,6 +42,7 @@ defmodule Mist.Nostr.Event do
     |> validate_length(:event_id, is: 64)
     |> validate_length(:sig, is: 128)
     |> validate_number(:kind, greater_than_or_equal_to: 0, less_than: 65535)
+    |> validate_number(:created_at, greater_than: 0)
     |> unique_constraint([:event_id])
   end
 end
