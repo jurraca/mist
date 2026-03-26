@@ -10,7 +10,7 @@ defmodule MistWeb.RelayLiveTest do
   end
 
   describe "Index" do
-    setup [:create_relay]
+    setup [:setup_identity, :create_relay]
 
     test "lists all relays", %{conn: conn, relay: relay} do
       {:ok, _index_live, html} = live(conn, ~p"/relays")

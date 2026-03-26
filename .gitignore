@@ -41,3 +41,4 @@ mist_dev.db*
 mist_test.db*
 *.db-wal
 *.db-shm
+.hex/

@@ -10,6 +10,8 @@ defmodule MistWeb.ProfileLiveTest do
   end
 
   describe "Index" do
+    setup [:setup_identity]
+
     test "renders the profiles page with search form", %{conn: conn} do
       {:ok, _index_live, html} = live(conn, ~p"/profiles")
 
@@ -37,7 +39,7 @@ defmodule MistWeb.ProfileLiveTest do
   end
 
   describe "Show" do
-    setup [:create_profile]
+    setup [:setup_identity, :create_profile]
 
     test "displays profile", %{conn: conn, profile: profile} do
       {:ok, _show_live, html} = live(conn, ~p"/profiles/#{profile}")

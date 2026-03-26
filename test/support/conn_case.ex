@@ -35,4 +35,12 @@ defmodule MistWeb.ConnCase do
     Mist.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
+
+  def setup_identity(_context) do
+    pubkey = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    {:ok, _profile} = Mist.Profile.get_or_create_profile(pubkey)
+    :persistent_term.put(:my_profile_pubkey, pubkey)
+    on_exit(fn -> :persistent_term.erase(:my_profile_pubkey) end)
+    {:ok, pubkey: pubkey}
+  end
 end
