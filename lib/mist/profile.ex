@@ -160,6 +160,8 @@ defmodule Mist.Profile do
           {pubkey, relay, petname}
         end
 
+      tag_data = Enum.uniq_by(tag_data, &elem(&1, 0))
+
       if tag_data == [] do
         {:ok, []}
       else
