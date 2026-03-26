@@ -121,10 +121,13 @@ defmodule Mist.Profile do
 
   def follow_profile(follower_pubkey, followed_pubkey) do
     with {:ok, follower} <- get_or_create_profile(follower_pubkey),
-         {:ok, followed} <- get_or_create_profile(followed_pubkey) do
-      %Follows{}
-      |> Follows.changeset(%{follower_id: follower.id, followed_id: followed.id})
-      |> Repo.insert()
+         {:ok, followed} <- get_or_create_profile(followed_pubkey),
+         {:ok, follow} <-
+           (%Follows{}
+            |> Follows.changeset(%{follower_id: follower.id, followed_id: followed.id})
+            |> Repo.insert()) do
+      Phoenix.PubSub.broadcast(Mist.PubSub, "profile:new_follow", {:new_follow, followed_pubkey})
+      {:ok, follow}
     end
   end
 

@@ -13,6 +13,7 @@ The application follows a modular Phoenix architecture with several key componen
 
 - **Signer Module**: Handles Nostr identity management by deriving public keys from private keys stored in the `NOSTR_PRIVKEY` environment variable
 - **Dispatcher Module**: Core orchestration component that manages subscriptions to Nostr relays and handles incoming messages via BEAM message passing
+- **SubscriptionPlanner Module** (`lib/mist/nostr/subscription_planner.ex`): GenServer that manages relay subscriptions for the follow list. On startup it queries the DB for all follows and their write relays (kind 10002 / `user_relays`), then opens one consolidated multi-pubkey subscription per relay. Reacts to `"profile:new_follow"` PubSub events to open incremental subscriptions when follows are added, without touching existing ones. State is `%{relay_url => MapSet.t(pubkeys)}`.
 - **EventHandler**: Processes and routes Nostr events received from relays
 - **Nostrbase Integration**: External application that manages WebSocket connections to Nostr relays and publishes messages via Phoenix PubSub
 
