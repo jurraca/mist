@@ -49,7 +49,6 @@ defmodule Mist.Nostr.SubscriptionPlanner do
 
   @impl GenServer
   def handle_info({:new_follow, followed_pubkey}, state) do
-    Logger.debug("SubscriptionPlanner: new follow event for #{String.slice(followed_pubkey, 0, 8)}...")
     new_state = open_sub_for_pubkey(followed_pubkey, state)
     {:noreply, new_state}
   end
@@ -70,7 +69,6 @@ defmodule Mist.Nostr.SubscriptionPlanner do
           state
         else
           relay_to_pubkeys = Profile.get_write_relays_by_relay(follows)
-          Logger.info("SubscriptionPlanner: loading #{length(follows)} follows across #{map_size(relay_to_pubkeys)} relay(s)")
 
           Enum.reduce(relay_to_pubkeys, state, fn {relay_url, pubkeys}, acc ->
             connect_and_subscribe(relay_url, pubkeys, acc)
@@ -141,20 +139,13 @@ defmodule Mist.Nostr.SubscriptionPlanner do
     since = Notes.since_for_filter(kinds: @feed_kinds, authors: pubkeys)
     limit = Notes.default_limit()
 
-    case Subscription.new(authors: pubkeys, kinds: @feed_kinds, since: since, limit: limit) do
-      {:ok, sub} ->
-        case NostrEx.send_sub(sub, send_via: [relay_url]) do
-          result when result in [:ok] or (is_tuple(result) and elem(result, 0) == :ok) ->
-            Logger.info("SubscriptionPlanner: opened sub on #{relay_url} for #{length(pubkeys)} pubkey(s)")
-            :ok
-
-          {:error, reason} ->
-            Logger.error("SubscriptionPlanner: failed to open sub on #{relay_url}: #{inspect(reason)}")
-            :error
-        end
-
+    with {:ok, sub} <- Subscription.new(authors: pubkeys, kinds: @feed_kinds, since: since, limit: limit),
+         {:ok, _sub_id} <- NostrEx.send_sub(sub, send_via: [relay_url]) do
+      Logger.info("SubscriptionPlanner: opened sub on #{relay_url} for #{length(pubkeys)} pubkey(s)")
+      :ok
+    else
       {:error, reason} ->
-        Logger.error("SubscriptionPlanner: failed to create subscription: #{inspect(reason)}")
+        Logger.error("SubscriptionPlanner: failed to subscribe on #{relay_url}: #{inspect(reason)}")
         :error
     end
   end
