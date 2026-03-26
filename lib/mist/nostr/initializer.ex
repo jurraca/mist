@@ -17,7 +17,7 @@ defmodule Mist.Nostr.Initializer do
   require Logger
 
   alias Mist.Nostr.EventHandler
-  alias Mist.Relay
+  alias Mist.{Profile, Relay}
 
   @default_bootstrap_relay "wss://purplepag.es"
   @bootstrap_kinds [0, 3, 10002]
@@ -31,10 +31,11 @@ defmodule Mist.Nostr.Initializer do
 
   @doc """
   Re-run the bootstrap fetch for an explicit pubkey at runtime (e.g. after identity switch).
+  Optionally accepts a relay URL hint; when provided it is used instead of the default relay.
   Runs synchronously in the calling process — call via Task.Supervisor.start_child/2.
   """
-  def bootstrap(pubkey) when is_binary(pubkey) do
-    run_bootstrap(pubkey)
+  def bootstrap(pubkey, relay_hint \\ nil) when is_binary(pubkey) do
+    run_bootstrap(pubkey, relay_hint)
   end
 
   @impl GenServer
@@ -72,21 +73,40 @@ defmodule Mist.Nostr.Initializer do
 
       pubkey ->
         Logger.info("Initializer: signer ready, starting bootstrap fetch")
-        run_bootstrap(pubkey)
+        run_bootstrap(pubkey, nil)
         {:noreply, state}
     end
   end
 
-  defp run_bootstrap(pubkey) do
-    relay_url = bootstrap_relay()
+  defp run_bootstrap(pubkey, relay_hint) do
+    relay_url = relay_hint || bootstrap_relay()
     Logger.info("Initializer: connecting to bootstrap relay #{relay_url}")
 
     case Relay.maybe_connect_relays([relay_url]) do
       {:ok, _} ->
         fetch_own_events(pubkey, relay_url)
+        maybe_persist_relay_hint(pubkey, relay_hint)
 
       {:error, reason} ->
         Logger.warning("Initializer: failed to connect to bootstrap relay: #{inspect(reason)}")
+    end
+  end
+
+  defp maybe_persist_relay_hint(_pubkey, nil), do: :ok
+
+  defp maybe_persist_relay_hint(pubkey, relay_url) do
+    case Profile.get_by_pubkey(pubkey) do
+      {:ok, profile} ->
+        case Profile.update_profile(profile, %{relay: relay_url}) do
+          {:ok, _} ->
+            Logger.info("Initializer: saved relay hint #{relay_url} to profile #{pubkey}")
+
+          {:error, reason} ->
+            Logger.warning("Initializer: failed to save relay hint to profile: #{inspect(reason)}")
+        end
+
+      {:error, reason} ->
+        Logger.warning("Initializer: could not find profile to save relay hint: #{inspect(reason)}")
     end
   end
 

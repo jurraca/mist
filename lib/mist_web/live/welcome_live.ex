@@ -15,8 +15,11 @@ defmodule MistWeb.WelcomeLive do
   end
 
   @impl true
-  def handle_event("switch_identity", %{"pubkey_input" => input}, socket) do
-    case Identity.switch(input) do
+  def handle_event("switch_identity", %{"pubkey_input" => input} = params, socket) do
+    relay_hint = params |> Map.get("relay_hint", "") |> String.trim()
+    relay_hint = if relay_hint == "", do: nil, else: relay_hint
+
+    case Identity.switch(input, relay_hint) do
       :ok ->
         {:noreply,
          socket
@@ -71,6 +74,19 @@ defmodule MistWeb.WelcomeLive do
               <%= if @error do %>
                 <p class="mt-2 text-sm text-red-400"><%= @error %></p>
               <% end %>
+            </div>
+
+            <div>
+              <label class="block text-sm text-text-secondary mb-2">
+                Relay hint <span class="text-text-muted">(optional)</span>
+              </label>
+              <input
+                type="text"
+                name="relay_hint"
+                placeholder="wss://relay.example.com"
+                class="w-full bg-dark-tertiary border border-dark-border rounded-lg px-4 py-3 text-text-primary placeholder-text-muted focus:outline-none focus:border-neon-green transition-colors font-mono text-sm"
+              />
+              <p class="mt-1 text-xs text-text-muted">Point the app at a relay that holds your profile and follow list.</p>
             </div>
 
             <button

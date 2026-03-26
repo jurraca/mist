@@ -15,9 +15,11 @@ defmodule Mist.Nostr.Identity do
   @doc """
   Switch the active identity to the given npub or hex pubkey.
 
+  Optionally accepts a relay URL hint used to bootstrap the user's data.
+
   Returns `:ok` on success, `{:error, reason}` on failure.
   """
-  def switch(input) when is_binary(input) do
+  def switch(input, relay_hint \\ nil) when is_binary(input) do
     with {:ok, hex_pubkey} <- Keys.decode_pubkey_input(input),
          :ok <- Settings.put(@pubkey_setting, hex_pubkey) do
       :persistent_term.put(:my_profile_pubkey, hex_pubkey)
@@ -27,7 +29,7 @@ defmodule Mist.Nostr.Identity do
       Phoenix.PubSub.broadcast(Mist.PubSub, "identity:switched", {:identity_switched, hex_pubkey})
 
       Task.Supervisor.start_child(Mist.TaskSupervisor, fn ->
-        Initializer.bootstrap(hex_pubkey)
+        Initializer.bootstrap(hex_pubkey, relay_hint)
       end)
 
       :ok
