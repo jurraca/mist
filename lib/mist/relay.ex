@@ -26,32 +26,69 @@ defmodule Mist.Relay do
     Repo.all(Info) |> Repo.preload(:metadata)
   end
 
+  @doc """
+  Ensure the given relay URLs are connected, connecting those that are not.
+
+  Connections are attempted concurrently. Returns `{:ok, connected_urls}` —
+  the subset of the input that is actually connected afterwards (previously
+  connected plus newly connected). Failures are logged and simply absent
+  from the result.
+  """
   def maybe_connect_relays(relay_list) do
     {connected, not_connected} = connected(relay_list)
-
-    if not_connected != [] do
-      case connect_relays(not_connected) do
-         {:ok, _} -> {:ok, relay_list}
-         {:error, reason} -> {:error, "could not connect to #{Enum.join(reason, ", ")}"}
-      end
-    else
-      {:ok, connected}
-    end
+    {:ok, connected ++ connect_relays(not_connected)}
   end
 
+  @doc """
+  Connect to the given relay URLs concurrently.
+
+  Returns the list of URLs that connected successfully.
+  """
   def connect_relays(relay_list) when is_list(relay_list) do
-    relay_list
-    |> Enum.map(fn relay_url -> Task.async(fn -> NostrEx.connect(relay_url) end) end)
-    |> Task.yield_many(timeout: 3_000)
-    |> Enum.map(fn {task, output} ->
-      output || Task.ignore(task)
+    tasks =
+      Enum.map(relay_list, fn url -> {url, Task.async(fn -> NostrEx.connect(url) end)} end)
+
+    url_by_ref = Map.new(tasks, fn {url, task} -> {task.ref, url} end)
+
+    tasks
+    |> Enum.map(fn {_url, task} -> task end)
+    |> Task.yield_many(timeout: @connect_timeout)
+    |> Enum.flat_map(fn {task, result} ->
+      url = Map.fetch!(url_by_ref, task.ref)
+
+      case result do
+        {:ok, {:ok, _name}} ->
+          [url]
+
+        {:ok, {:error, reason}} ->
+          Logger.warning("Relay.connect: could not connect to #{url}: #{reason}")
+          []
+
+        {:exit, reason} ->
+          Logger.warning("Relay.connect: connect to #{url} crashed: #{inspect(reason)}")
+          []
+
+        nil ->
+          Task.shutdown(task, :brutal_kill)
+          Logger.warning("Relay.connect: connect to #{url} timed out")
+          []
+      end
     end)
-    |> Mist.Utils.collect()
   end
 
   def connected(relay_list) do
     registered = NostrEx.RelayManager.registered_names()
-    Enum.split_with(relay_list, fn relay -> relay in registered end)
+    Enum.split_with(relay_list, fn relay -> relay_name(relay) in registered end)
+  end
+
+  @doc """
+  Normalizes a relay URL to the name NostrEx registers it under (the host).
+  """
+  def relay_name(relay_url) when is_binary(relay_url) do
+    case URI.parse(relay_url) do
+      %URI{host: host} when is_binary(host) -> String.downcase(host)
+      _ -> relay_url
+    end
   end
 
   @doc """
