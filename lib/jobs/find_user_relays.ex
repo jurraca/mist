@@ -10,7 +10,6 @@ defmodule Mist.Jobs.FindUserRelays do
   @directories ["wss://purplepag.es"]
   @popular_relays [
     "wss://nos.lol",
-    "wss://relay.damus.io",
     "wss://relay.primal.net",
     "wss://nostr.bitcoiner.social"
   ]

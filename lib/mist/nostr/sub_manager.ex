@@ -44,7 +44,6 @@ defmodule Mist.Nostr.SubManager do
 
   @default_fallback_relays [
     "wss://nos.lol",
-    "wss://relay.damus.io",
     "wss://relay.primal.net",
     "wss://nostr.bitcoiner.social"
   ]
