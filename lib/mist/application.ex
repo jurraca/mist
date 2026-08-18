@@ -21,7 +21,6 @@ defmodule Mist.Application do
           [
             {Mist.Nostr.Signer, signing_method: :local},
             Mist.Nostr.SubManager,
-            Mist.Nostr.Initializer,
             Mist.Jobs.FindUserRelays
           ]
         end ++

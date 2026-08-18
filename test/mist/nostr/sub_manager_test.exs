@@ -160,5 +160,46 @@ defmodule Mist.Nostr.SubManagerTest do
 
       assert {:noreply, ^state} = SubManager.handle_info({:close, "nope", "nos.lol"}, state)
     end
+
+    test "closing the meta sub clears it so reconcile reopens it" do
+      state = %SubManager{meta_sub: "meta-1", identity: unique_pubkey()}
+
+      assert {:noreply, new_state} = SubManager.handle_info({:close, "meta-1", "purplepag.es"}, state)
+
+      assert new_state.meta_sub == nil
+    end
+
+    test "closing an unrelated sub keeps the meta sub" do
+      state = %SubManager{meta_sub: "meta-1", identity: unique_pubkey()}
+
+      assert {:noreply, new_state} = SubManager.handle_info({:close, "other", "nos.lol"}, state)
+
+      assert new_state.meta_sub == "meta-1"
+    end
+  end
+
+  describe "handle_cast({:identity_switched, ...})" do
+    test "resets subs, sets identity and relay hint, schedules reconcile" do
+      state = %SubManager{
+        identity: unique_pubkey(),
+        meta_sub: "meta-1",
+        meta_relay_hint: nil,
+        feed: %{"wss://nos.lol" => %{"sub-1" => MapSet.new(["pk"])}},
+        named: %{notes_feed: "sub-9"}
+      }
+
+      new_pk = unique_pubkey()
+
+      assert {:noreply, new_state} =
+               SubManager.handle_cast({:identity_switched, new_pk, "wss://hint.test"}, state)
+
+      assert new_state.identity == new_pk
+      assert new_state.meta_relay_hint == "wss://hint.test"
+      assert new_state.feed == %{}
+      assert new_state.meta_sub == nil
+      # named subs belong to the UI and survive identity switches
+      assert new_state.named == %{notes_feed: "sub-9"}
+      assert new_state.reconcile_timer != nil
+    end
   end
 end

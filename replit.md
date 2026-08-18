@@ -14,7 +14,7 @@ The application follows a modular Phoenix architecture with several key componen
 - **Signer Module**: Handles Nostr identity management by deriving public keys from private keys stored in the `NOSTR_PRIVKEY` environment variable
 - **SubManager Module** (`lib/mist/nostr/sub_manager.ex`): Single GenServer owning ALL relay subscriptions and the single event ingress (NostrEx registers the subscribing process as the receiver). Handles ad-hoc named subscriptions (`:notes_feed`, profile/follows lookups) plus the follow-feed: a reconciliation loop computes desired subscriptions from the DB (follows → NIP-65 write relays from `user_relays`, fallback to well-known relays), diffs against actual state, and opens/closes subs. Reconciles on startup, `identity:switched`, `profile:new_follow`, `profile:follow_list_updated`, `profile:user_relays_updated`, and a 5-minute tick that reconnects dead relays. Authors are chunked (200/sub) per relay. State: `%{named: %{name => sub_id}, feed: %{relay_url => %{sub_id => MapSet(pubkeys)}}, identity: pubkey}`.
 - **EventHandler**: Processes and routes Nostr events received from relays (via SubManager, in supervised tasks)
-- **NostrEx Integration**: Path dependency (`/home/base/code/nostr-elixir/nostr_ex`) managing WebSocket connections to relays; events/filters/tags come from NostrCore (`NostrCore.Event`, `NostrCore.Tag`, `NostrCore.Filter`, `NostrCore.Bech32`). One-shot fetches (bootstrap, relay discovery) run as task-based receive loops in `Initializer` / `Jobs.FindUserRelays`.
+- **NostrEx Integration**: Path dependency (`/home/base/code/nostr-elixir/nostr_ex`) managing WebSocket connections to relays; events/filters/tags come from NostrCore (`NostrCore.Event`, `NostrCore.Tag`, `NostrCore.Filter`, `NostrCore.Bech32`). The identity's own kind 0/3/10002 are covered by SubManager's persistent self-meta sub (bootstrap relay or identity-switch hint). One-shot relay discovery runs as task-based receive loops in `Jobs.FindUserRelays`.
 
 Subscriptions deliver events to the process that created them — which is always SubManager, by design.
 
@@ -49,7 +49,7 @@ The application uses SQLite as the primary database through:
 ## Identity Management
 - **Read-only Identity**: Users can set a public key (npub or hex) without a private key via `/welcome`
 - **Settings Table**: Key/value store in SQLite (`Mist.Settings`) persists the active pubkey across restarts
-- **Identity Module** (`Mist.Nostr.Identity`): Handles identity switching — decodes npub, updates persistent_term, broadcasts PubSub, triggers bootstrap
+- **Identity Module** (`Mist.Nostr.Identity`): Handles identity switching — decodes npub, updates persistent_term, broadcasts PubSub, hands the new identity (and optional relay hint) to SubManager
 - **LiveIdentity Hook** (`MistWeb.LiveIdentity`): on_mount guard redirecting to `/welcome` when no pubkey is configured; broadcasts identity changes to all live views
 - **Welcome/Switcher LiveView**: `/welcome` route for first-run setup and identity switching
 

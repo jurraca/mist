@@ -7,7 +7,7 @@ defmodule Mist.Nostr.Identity do
   """
 
   alias Mist.{Settings, Profile}
-  alias Mist.Nostr.{Keys, Initializer}
+  alias Mist.Nostr.{Keys, SubManager}
   require Logger
 
   @pubkey_setting "active_pubkey"
@@ -15,7 +15,8 @@ defmodule Mist.Nostr.Identity do
   @doc """
   Switch the active identity to the given npub or hex pubkey.
 
-  Optionally accepts a relay URL hint used to bootstrap the user's data.
+  Optionally accepts a relay URL hint, used by SubManager for the new
+  identity's self-meta subscription (first fetch of kind 0/3/10002).
 
   Returns `:ok` on success, `{:error, reason}` on failure.
   """
@@ -28,9 +29,7 @@ defmodule Mist.Nostr.Identity do
 
       Phoenix.PubSub.broadcast(Mist.PubSub, "identity:switched", {:identity_switched, hex_pubkey})
 
-      Task.Supervisor.start_child(Mist.TaskSupervisor, fn ->
-        Initializer.bootstrap(hex_pubkey, relay_hint)
-      end)
+      SubManager.identity_switched(hex_pubkey, relay_hint)
 
       :ok
     end

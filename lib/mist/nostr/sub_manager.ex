@@ -2,11 +2,18 @@ defmodule Mist.Nostr.SubManager do
   @moduledoc """
   Single owner of all relay subscriptions.
 
-  Two kinds of subscriptions live here:
+  Three kinds of subscriptions live here:
 
     * **Named (ad-hoc) subscriptions** — UI/profile driven filters
       (`:notes_feed`, profile lookups, follow-list fetches). Managed via
       `subscribe/2`, `subscribe_with_name/3` and `cancel_named_subscription/1`.
+
+    * **Self-meta subscription** — one persistent subscription for the
+      identity's own kind 0 (profile), kind 3 (follow list) and kind 10002
+      (relay list) events, opened on the bootstrap relay (or a relay hint
+      given at identity switch). This replaces the old one-shot bootstrap
+      fetch: live updates flow continuously, and a dead bootstrap relay is
+      retried by the reconcile tick instead of leaving the feed empty.
 
     * **Feed subscriptions** — the follow-graph feed. A reconciliation loop
       computes the *desired* state from the DB (my follows → their NIP-65
@@ -14,12 +21,10 @@ defmodule Mist.Nostr.SubManager do
       with no known relays) and diffs it against the *actual* open
       subscriptions, opening and closing subscriptions as needed.
 
-  Because `NostrEx.send_sub/2` registers the calling process as the receiver
-  of subscription messages, this GenServer is the single event ingress for
-  all subscriptions: every relay event is forwarded to
-  `Mist.Nostr.EventHandler` in a supervised task.
+  This GenServer is the single event ingress for all subscriptions: every
+  relay event is forwarded to `Mist.Nostr.EventHandler` in a supervised task.
 
-  Reconciliation is triggered by: startup, `identity:switched`,
+  Reconciliation is triggered by: startup, `identity_switched/2`,
   `profile:new_follow`, `profile:follow_list_updated`,
   `profile:user_relays_updated`, and a periodic tick which also re-heals
   relays whose connections dropped (NostrEx does not reconnect on its own).
@@ -36,11 +41,14 @@ defmodule Mist.Nostr.SubManager do
   @pubsub Mist.PubSub
 
   @feed_kinds [1, 6, 7, 9735]
+  @meta_kinds [0, 3, 10002]
   @chunk_size 200
   @reconcile_debounce 1_000
   @tick_interval 5 * 60 * 1_000
   @identity_retry_interval 200
   @identity_max_retries 50
+
+  @default_bootstrap_relay "wss://purplepag.es"
 
   @default_fallback_relays [
     "wss://nos.lol",
@@ -51,11 +59,14 @@ defmodule Mist.Nostr.SubManager do
   defstruct named: %{},
             feed: %{},
             identity: nil,
+            meta_sub: nil,
+            meta_relay_hint: nil,
             identity_retries: 0,
             reconcile_timer: nil
 
   # feed: %{relay_url => %{sub_id => MapSet.t(pubkey)}}
   # named: %{name => sub_id}
+  # meta_sub: sub_id | nil
 
   ## Client API
 
@@ -79,6 +90,15 @@ defmodule Mist.Nostr.SubManager do
 
   def cancel_all_subscriptions do
     GenServer.cast(__MODULE__, :cancel_all)
+  end
+
+  @doc """
+  Point SubManager at a new identity: closes the previous identity's
+  subscriptions, opens a self-meta sub for the new one (using `relay_hint`
+  for the meta sub when given), and reconciles feed subscriptions.
+  """
+  def identity_switched(pubkey, relay_hint \\ nil) when is_binary(pubkey) do
+    GenServer.cast(__MODULE__, {:identity_switched, pubkey, relay_hint})
   end
 
   @doc "Fetch kind 0 (profile) and kind 10002 (relay list) events for the given pubkeys."
@@ -109,7 +129,6 @@ defmodule Mist.Nostr.SubManager do
 
   @impl GenServer
   def init(state) do
-    Phoenix.PubSub.subscribe(@pubsub, "identity:switched")
     Phoenix.PubSub.subscribe(@pubsub, "profile:new_follow")
     Phoenix.PubSub.subscribe(@pubsub, "profile:follow_list_updated")
     Phoenix.PubSub.subscribe(@pubsub, "profile:user_relays_updated")
@@ -124,7 +143,7 @@ defmodule Mist.Nostr.SubManager do
   end
 
   # The Signer sets the identity in its own handle_continue, which is not
-  # ordered against ours — retry until it appears (same pattern as Initializer).
+  # ordered against ours — retry until it appears (same retry pattern the old Initializer used).
   defp resolve_identity(%{identity_retries: retries} = state) do
     case Identity.current_pubkey() do
       nil when retries < @identity_max_retries ->
@@ -184,15 +203,21 @@ defmodule Mist.Nostr.SubManager do
     {:noreply, %{state | named: %{}}}
   end
 
-  # ── Reconciliation triggers ───────────────────────────────
+  def handle_cast({:identity_switched, pubkey, relay_hint}, state) do
+    Logger.info("SubManager: identity switched, resetting subscriptions")
 
-  @impl GenServer
-  def handle_info({:identity_switched, pubkey}, state) do
-    Logger.info("SubManager: identity switched, resetting feed subscriptions")
-    state = state |> close_all_feed_subs() |> Map.put(:identity, pubkey)
+    state =
+      state
+      |> close_all_feed_subs()
+      |> close_meta_sub()
+      |> Map.merge(%{identity: pubkey, meta_relay_hint: relay_hint})
+
     {:noreply, schedule_reconcile(state)}
   end
 
+  # ── Reconciliation triggers ───────────────────────────────
+
+  @impl GenServer
   def handle_info({:new_follow, _pubkey}, state) do
     {:noreply, schedule_reconcile(state)}
   end
@@ -262,11 +287,47 @@ defmodule Mist.Nostr.SubManager do
   defp reconcile(%{identity: nil} = state), do: state
 
   defp reconcile(state) do
+    state = ensure_meta_sub(state)
     desired = desired_feeds(state.identity)
 
     state
     |> close_feed_subs_for_undesired_relays(desired)
     |> open_feed_subs_for_missing(desired)
+  end
+
+  ## Self-meta subscription
+
+  # One persistent sub for the identity's own profile/follow-list/relay-list
+  # events. Lives next to the feed subs; its events drive reconciliation via
+  # the EventHandler -> PubSub triggers.
+  defp ensure_meta_sub(%{meta_sub: sub_id} = state) when is_binary(sub_id), do: state
+
+  defp ensure_meta_sub(state) do
+    relay = state.meta_relay_hint || bootstrap_relay()
+
+    with {:ok, connected} <- Relay.maybe_connect_relays([relay]),
+         true <- relay in connected,
+         {:ok, sub} <- NostrEx.create_sub(authors: [state.identity], kinds: @meta_kinds),
+         :ok <- NostrEx.listen(sub),
+         {:ok, sub_id} <- NostrEx.send_sub(sub, send_via: [relay]) do
+      Logger.info("SubManager: self-meta sub on #{relay}")
+      %{state | meta_sub: sub_id}
+    else
+      _ ->
+        Logger.warning("SubManager: could not open self-meta sub on #{relay}, will retry on next reconcile")
+        state
+    end
+  end
+
+  defp close_meta_sub(%{meta_sub: nil} = state), do: state
+
+  defp close_meta_sub(%{meta_sub: sub_id} = state) do
+    NostrEx.close_sub(sub_id)
+    %{state | meta_sub: nil}
+  end
+
+  defp bootstrap_relay do
+    Application.get_env(:mist, :bootstrap_relay, @default_bootstrap_relay)
   end
 
   @doc false
@@ -422,7 +483,9 @@ defmodule Mist.Nostr.SubManager do
       Map.new(state.named, fn {name, id} -> {name, id} end)
       |> Map.reject(fn {_name, id} -> id == sub_id end)
 
-    %{state | feed: feed, named: named}
+    meta_sub = if state.meta_sub == sub_id, do: nil, else: state.meta_sub
+
+    %{state | feed: feed, named: named, meta_sub: meta_sub}
   end
 
   defp cancel_named_sub(state, name) do

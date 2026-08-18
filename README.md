@@ -18,12 +18,13 @@ On startup, Mist looks for a `NOSTR_PRIVKEY` env variable. If it exists, the `Si
 
 The `Mist.Nostr.SubManager` GenServer is the core of the application and the single owner of all relay subscriptions:
 
+- **Self-meta subscription**: one persistent sub for the identity's own kind 0 (profile), kind 3 (follow list) and kind 10002 (relay list), opened on the bootstrap relay (or a relay hint given at identity switch). Its events drive the rest of the pipeline.
+- **Feed subscriptions**: a reconciliation loop computes the desired state from the DB (the user's follows → their NIP-65 write relays, falling back to a set of well-known relays for follows with no known relay list) and opens/closes subscriptions to match. It reconciles on startup, identity switches, new follows, follow-list and relay-list updates, and a periodic tick that reconnects dead relays.
 - **Ad-hoc (named) subscriptions** for UI-driven filters (`:notes_feed`, profile and follow-list lookups).
-- **Feed subscriptions**: a reconciliation loop computes the desired state from the DB (the user's follows → their NIP-65 write relays, falling back to a set of well-known relays for follows with no known relay list) and opens/closes subscriptions to match. It reconciles on startup, identity switches, new follows, follow-list (kind 3) and relay-list (kind 10002) updates, and a periodic tick that also reconnects dead relays.
 
-Because `NostrEx.send_sub/2` registers the calling process as the receiver of a subscription's messages, SubManager is the single event ingress: every incoming event is forwarded to `EventHandler`, which stores it in the local DB and broadcasts over PubSub to subscribed LiveViews.
+SubManager is the single event ingress: every incoming event is forwarded to `EventHandler`, which stores it in the local DB and broadcasts over PubSub to subscribed LiveViews.
 
-Websocket connections to relays are managed by the [NostrEx](../nostr_ex) library (built on NostrCore). One-shot fetches (bootstrap of own kind 0/3/10002, relay discovery) run as separate task-based receive loops in `Initializer` and `Jobs.FindUserRelays`.
+Websocket connections to relays are managed by the [NostrEx](../nostr_ex) library (built on NostrCore). One-shot relay discovery (finding follows' NIP-65 relay lists) runs as task-based receive loops in `Jobs.FindUserRelays`.
 
 That's really it: subscribe to messages, handle them in `EventHandler` and dispatch them where you want.
 

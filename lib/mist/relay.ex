@@ -46,7 +46,7 @@ defmodule Mist.Relay do
 
   Tasks are started with `Task.Supervisor.async_nolink/2`: a raising or
   hanging connect (e.g. a GenServer.call timeout inside NostrEx) must never
-  propagate an exit into the calling GenServer (SubManager, Initializer).
+  propagate an exit into the calling GenServer (SubManager).
   """
   def connect_relays(relay_list) when is_list(relay_list) do
     tasks =
