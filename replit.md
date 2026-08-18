@@ -12,12 +12,11 @@ Preferred communication style: Simple, everyday language.
 The application follows a modular Phoenix architecture with several key components:
 
 - **Signer Module**: Handles Nostr identity management by deriving public keys from private keys stored in the `NOSTR_PRIVKEY` environment variable
-- **Dispatcher Module**: Core orchestration component that manages subscriptions to Nostr relays and handles incoming messages via BEAM message passing
-- **SubscriptionPlanner Module** (`lib/mist/nostr/subscription_planner.ex`): GenServer that manages relay subscriptions for the follow list. On startup it queries the DB for all follows and their write relays (kind 10002 / `user_relays`), then opens one consolidated multi-pubkey subscription per relay. Reacts to `"profile:new_follow"` PubSub events to open incremental subscriptions when follows are added, without touching existing ones. State is `%{relay_url => MapSet.t(pubkeys)}`.
-- **EventHandler**: Processes and routes Nostr events received from relays
-- **Nostrbase Integration**: External application that manages WebSocket connections to Nostr relays and publishes messages via Phoenix PubSub
+- **SubManager Module** (`lib/mist/nostr/sub_manager.ex`): Single GenServer owning ALL relay subscriptions and the single event ingress (NostrEx registers the subscribing process as the receiver). Handles ad-hoc named subscriptions (`:notes_feed`, profile/follows lookups) plus the follow-feed: a reconciliation loop computes desired subscriptions from the DB (follows → NIP-65 write relays from `user_relays`, fallback to well-known relays), diffs against actual state, and opens/closes subs. Reconciles on startup, `identity:switched`, `profile:new_follow`, `profile:follow_list_updated`, `profile:user_relays_updated`, and a 5-minute tick that reconnects dead relays. Authors are chunked (200/sub) per relay. State: `%{named: %{name => sub_id}, feed: %{relay_url => %{sub_id => MapSet(pubkeys)}}, identity: pubkey}`.
+- **EventHandler**: Processes and routes Nostr events received from relays (via SubManager, in supervised tasks)
+- **NostrEx Integration**: Path dependency (`/home/base/code/nostr-elixir/nostr_ex`) managing WebSocket connections to relays; events/filters/tags come from NostrCore (`NostrCore.Event`, `NostrCore.Tag`, `NostrCore.Filter`, `NostrCore.Bech32`). One-shot fetches (bootstrap, relay discovery) run as task-based receive loops in `Initializer` / `Jobs.FindUserRelays`.
 
-The backend uses a functional, message-passing approach where the process creating subscriptions automatically becomes the receiver for subscription messages.
+Subscriptions deliver events to the process that created them — which is always SubManager, by design.
 
 ## Frontend Architecture
 The frontend implements a modern, dark-themed interface with real-time capabilities:
@@ -68,7 +67,7 @@ The application uses SQLite as the primary database through:
 - **Bandit**: High-performance HTTP server (Phoenix 1.7+ default)
 
 ## Nostr Protocol Integration
-- **Nostrbase**: External application managing WebSocket connections to Nostr relays
+- **NostrEx**: Path dependency managing WebSocket connections to Nostr relays (with NostrCore for events/tags/filters/bech32)
 - **Secp256k1 Library**: Cryptographic operations for Nostr key management and message signing
 - **Bech32 Encoding**: Address format encoding/decoding for Nostr compatibility
 

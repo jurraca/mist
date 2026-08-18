@@ -81,9 +81,6 @@ defmodule MistWeb.ProfileLive.Manage do
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, "Failed to create profile: #{inspect(reason)}")}
         end
-
-      error ->
-        {:noreply, put_flash(socket, :error, "Failed to generate keypair: #{inspect(error)}")}
     end
   end
 
@@ -104,14 +101,10 @@ defmodule MistWeb.ProfileLive.Manage do
         |> Map.new()
         |> Jason.encode!()
 
-      event_params = NostrEx.create_event(0, %{
-        content: content,
-        tags: []
-      })
-
-      with {:ok, profile} <- Profile.update_profile(socket.assigns.profile, params),
-           {:ok, event} <- Signer.sign_event(event_params),
-           :ok <- NostrEx.send_event(event) do
+      with {:ok, unsigned} <- NostrEx.create_event(0, content: content, tags: []),
+           {:ok, profile} <- Profile.update_profile(socket.assigns.profile, params),
+           {:ok, event} <- Signer.sign_event(unsigned),
+           {:ok, _event_id, _failures} <- NostrEx.send_event(event) do
         {:noreply,
          socket
          |> assign(profile: profile)

@@ -4,7 +4,6 @@ defmodule Mist.Settings do
   """
 
   alias Mist.Repo
-  require Ecto.Query
 
   def get(key) when is_binary(key) do
     case Repo.query("SELECT value FROM settings WHERE key = $1", [key]) do

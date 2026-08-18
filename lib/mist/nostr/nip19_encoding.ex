@@ -69,7 +69,7 @@ defmodule Mist.Nostr.NIP19 do
   def parse_field(_, acc), do: parse_field(nil, acc)
 
   defp slice_bit_length(binary, length) do
-    <<slice::binary-size(length), rest::binary>> = binary
+    <<slice::binary-size(^length), rest::binary>> = binary
     {slice, rest}
   end
 

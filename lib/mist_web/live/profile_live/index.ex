@@ -5,7 +5,7 @@ defmodule MistWeb.ProfileLive.Index do
 
   alias Mist.Profile
   alias Mist.Nostr.NIP19
-  alias Nostr.Bech32
+  alias NostrCore.Bech32
 
   @impl true
   def mount(_params, _session, socket) do
@@ -38,7 +38,7 @@ defmodule MistWeb.ProfileLive.Index do
   @impl true
   def handle_event("search", %{"search_term" => input}, socket) do
     with {:ok, profile_data} <- parse_identifier(input) do
-      npub = Bech32.hex_to_npub(profile_data.pubkey)
+      npub = npub_for(profile_data.pubkey)
 
       case search(profile_data) do
         {:ok, profile, :local} ->
@@ -113,9 +113,6 @@ defmodule MistWeb.ProfileLive.Index do
           :ok -> {:ok, profile_data}
           err -> err
         end
-
-      error ->
-        error
     end
   end
 
@@ -135,21 +132,27 @@ defmodule MistWeb.ProfileLive.Index do
   end
 
   defp parse_identifier("npub" <> _rest = input) do
-    case Bech32.npub_to_hex(input) do
-      pubkey when is_binary(pubkey) ->
+    case Bech32.to_hex(input) do
+      {:ok, pubkey} ->
         {:ok, %{pubkey: pubkey, npub: input, relays: []}}
 
-      _ ->
+      {:error, _} ->
         {:error, "Invalid npub format"}
     end
   end
 
   defp parse_identifier(input) when byte_size(input) == 64 do
-    npub = Bech32.hex_to_npub(input)
-    {:ok, %{pubkey: input, npub: npub, relays: []}}
+    {:ok, %{pubkey: input, npub: npub_for(input), relays: []}}
   end
 
   defp parse_identifier(_) do
     {:error, "Invalid format - please provide nprofile, npub, or hex pubkey"}
+  end
+
+  defp npub_for(hex) do
+    case Bech32.npub(hex) do
+      {:ok, npub} -> npub
+      {:error, _} -> nil
+    end
   end
 end

@@ -7,7 +7,6 @@ defmodule MistWeb.RelayLive.Index do
 
   alias Mist.Relay
   alias Mist.Relay.Metadata
-  alias NostrEx.RelayManager
 
   @impl true
   def mount(_params, _session, socket) do
@@ -111,7 +110,7 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def handle_event("disconnect", %{"url" => url}, socket) do
-    RelayManager.disconnect(url)
+    NostrEx.disconnect(url)
 
     {:noreply,
      socket
@@ -123,8 +122,8 @@ defmodule MistWeb.RelayLive.Index do
   def handle_event("delete", %{"url" => url}, socket) do
     case Relay.get_relay_by_url(url) do
       {:ok, relay} ->
-        if MapSet.member?(MapSet.new(NostrEx.list_relays()), url) do
-          RelayManager.disconnect(url)
+        if MapSet.member?(MapSet.new(NostrEx.list_relays()), Relay.relay_name(url)) do
+          NostrEx.disconnect(url)
         end
 
         Relay.delete_relay(relay)
@@ -178,7 +177,7 @@ defmodule MistWeb.RelayLive.Index do
         relay_info: if(needs_fetch, do: nil, else: relay_info),
         relay_name: relay.name || relay.url,
         url: relay.url,
-        connected?: MapSet.member?(connected_urls, relay.url)
+        connected?: MapSet.member?(connected_urls, Relay.relay_name(relay.url))
       }
     end)
   end

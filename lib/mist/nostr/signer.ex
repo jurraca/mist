@@ -2,7 +2,6 @@ defmodule Mist.Nostr.Signer do
   use GenServer
   alias Mist.Nostr.{Keys, Identity}
   alias Mist.Profile
-  require Logger
 
   @type signing_method :: :local | :remote
 

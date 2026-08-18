@@ -3,7 +3,7 @@ defmodule MistWeb.NoteLive.Index do
 
   on_mount {MistWeb.LiveIdentity, :require_identity}
 
-  alias Mist.Nostr.{Dispatcher, Event, Keys}
+  alias Mist.Nostr.{Event, Keys, SubManager}
   alias Mist.Notes
   alias Mist.Profile
   alias Mist.Subscriptions
@@ -128,7 +128,7 @@ defmodule MistWeb.NoteLive.Index do
     if socket.assigns.batch_timer_ref do
       Process.cancel_timer(socket.assigns.batch_timer_ref)
     end
-    Dispatcher.cancel_named_subscription(:notes_feed)
+    SubManager.cancel_named_subscription(:notes_feed)
     :ok
   end
 
@@ -296,10 +296,10 @@ defmodule MistWeb.NoteLive.Index do
         {:ok, filter_opts} ->
           {:ok, sub} = NostrEx.create_sub(filter_opts[:filters])
           opts = if filter_opts[:relay], do: [relays: [filter_opts[:relay]]], else: []
-          Dispatcher.subscribe_with_name(:notes_feed, sub, opts)
+          SubManager.subscribe_with_name(:notes_feed, sub, opts)
 
         :skip ->
-          Dispatcher.cancel_named_subscription(:notes_feed)
+          SubManager.cancel_named_subscription(:notes_feed)
       end
     end
   end

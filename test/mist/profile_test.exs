@@ -128,7 +128,7 @@ defmodule Mist.ProfileTest do
       priv = profile_fixture()
 
       {:ok, f1} = Profile.follow_profile(follower.pubkey, pub.pubkey)
-      {:ok, f2} = Profile.follow_profile(follower.pubkey, priv.pubkey)
+      {:ok, _f2} = Profile.follow_profile(follower.pubkey, priv.pubkey)
 
       Profile.toggle_follow_visibility(f1.id, true)
 
@@ -143,7 +143,7 @@ defmodule Mist.ProfileTest do
       priv = profile_fixture()
 
       {:ok, f1} = Profile.follow_profile(follower.pubkey, pub.pubkey)
-      {:ok, f2} = Profile.follow_profile(follower.pubkey, priv.pubkey)
+      {:ok, _f2} = Profile.follow_profile(follower.pubkey, priv.pubkey)
 
       Profile.toggle_follow_visibility(f1.id, true)
 
@@ -275,7 +275,7 @@ defmodule Mist.ProfileTest do
     test "add_user_relays/2 creates user relays via parse_tag" do
       pubkey = unique_pubkey()
       profile_fixture(%{pubkey: pubkey})
-      relay = relay_fixture(%{"url" => "wss://user-relay.example.com"})
+      _relay = relay_fixture(%{"url" => "wss://user-relay.example.com"})
 
       tags = [%{data: "wss://user-relay.example.com", info: ["read"]}]
       assert {count, _} = Profile.add_user_relays(pubkey, tags)
@@ -376,7 +376,7 @@ defmodule Mist.ProfileTest do
     test "valid :p atom tag creates a follow row and a profile stub" do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: :p, data: followed_pubkey, info: []}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: []}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 
@@ -388,7 +388,7 @@ defmodule Mist.ProfileTest do
     test "string \"p\" type tag is also accepted" do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: "p", data: followed_pubkey, info: []}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: []}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 
@@ -399,7 +399,7 @@ defmodule Mist.ProfileTest do
     test "petname from tag info is stored on the follow row" do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: :p, data: followed_pubkey, info: ["wss://relay.example.com", "alice"]}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: ["wss://relay.example.com", "alice"]}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 
@@ -410,7 +410,7 @@ defmodule Mist.ProfileTest do
     test "petname is nil when info has no second element" do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: :p, data: followed_pubkey, info: ["wss://relay.example.com"]}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: ["wss://relay.example.com"]}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 
@@ -421,7 +421,7 @@ defmodule Mist.ProfileTest do
     test "relay hint is stored on a newly created profile stub" do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: :p, data: followed_pubkey, info: ["wss://hint.example.com", "bob"]}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: ["wss://hint.example.com", "bob"]}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 
@@ -433,7 +433,7 @@ defmodule Mist.ProfileTest do
       follower = profile_fixture()
       existing_relay = "wss://original.example.com"
       followed = profile_fixture(%{relay: existing_relay})
-      tag = %Nostr.Tag{type: :p, data: followed.pubkey, info: ["wss://interloper.example.com"]}
+      tag = %NostrCore.Tag{type: "p", data: followed.pubkey, info: ["wss://interloper.example.com"]}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 
@@ -444,7 +444,7 @@ defmodule Mist.ProfileTest do
     test "follower profile is created via get_or_create if it does not exist" do
       new_pubkey = unique_pubkey()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: :p, data: followed_pubkey, info: []}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: []}
 
       Profile.add_follow_list(new_pubkey, [tag])
 
@@ -455,7 +455,7 @@ defmodule Mist.ProfileTest do
     test "calling twice with the same tags is idempotent" do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: :p, data: followed_pubkey, info: []}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: []}
 
       Profile.add_follow_list(follower.pubkey, [tag])
       Profile.add_follow_list(follower.pubkey, [tag])
@@ -467,8 +467,8 @@ defmodule Mist.ProfileTest do
     test "tags with type other than :p or \"p\" are silently ignored" do
       follower = profile_fixture()
       tags = [
-        %Nostr.Tag{type: :e, data: unique_pubkey(), info: []},
-        %Nostr.Tag{type: :a, data: unique_pubkey(), info: []}
+        %NostrCore.Tag{type: "e", data: unique_pubkey(), info: []},
+        %NostrCore.Tag{type: "a", data: unique_pubkey(), info: []}
       ]
 
       assert {:ok, []} = Profile.add_follow_list(follower.pubkey, tags)
@@ -479,8 +479,8 @@ defmodule Mist.ProfileTest do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
       tags = [
-        %Nostr.Tag{type: :p, data: followed_pubkey, info: ["wss://first.example.com", "first"]},
-        %Nostr.Tag{type: :p, data: followed_pubkey, info: ["wss://second.example.com", "second"]}
+        %NostrCore.Tag{type: "p", data: followed_pubkey, info: ["wss://first.example.com", "first"]},
+        %NostrCore.Tag{type: "p", data: followed_pubkey, info: ["wss://second.example.com", "second"]}
       ]
 
       Profile.add_follow_list(follower.pubkey, tags)
@@ -493,7 +493,7 @@ defmodule Mist.ProfileTest do
 
     test "tag with nil data is skipped by the is_binary guard" do
       follower = profile_fixture()
-      tag = %Nostr.Tag{type: :p, data: nil, info: []}
+      tag = %NostrCore.Tag{type: "p", data: nil, info: []}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 
@@ -502,7 +502,7 @@ defmodule Mist.ProfileTest do
 
     test "tag with empty string data is ignored" do
       follower = profile_fixture()
-      tag = %Nostr.Tag{type: :p, data: "", info: []}
+      tag = %NostrCore.Tag{type: "p", data: "", info: []}
 
       assert {:ok, []} = Profile.add_follow_list(follower.pubkey, [tag])
     end
@@ -515,7 +515,7 @@ defmodule Mist.ProfileTest do
         42,
         "raw_string",
         %{type: "p", data: followed_pubkey, info: []},
-        %Nostr.Tag{type: :p, data: followed_pubkey, info: []}
+        %NostrCore.Tag{type: "p", data: followed_pubkey, info: []}
       ]
 
       Profile.add_follow_list(follower.pubkey, tags)
@@ -527,7 +527,7 @@ defmodule Mist.ProfileTest do
     test "tag with info: [] stores nil petname and nil relay on new stub" do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: :p, data: followed_pubkey, info: []}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: []}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 
@@ -540,7 +540,7 @@ defmodule Mist.ProfileTest do
     test "tag with relay-only info stores nil petname" do
       follower = profile_fixture()
       followed_pubkey = unique_pubkey()
-      tag = %Nostr.Tag{type: :p, data: followed_pubkey, info: ["wss://relay.example.com"]}
+      tag = %NostrCore.Tag{type: "p", data: followed_pubkey, info: ["wss://relay.example.com"]}
 
       Profile.add_follow_list(follower.pubkey, [tag])
 

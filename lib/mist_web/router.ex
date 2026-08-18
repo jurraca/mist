@@ -29,10 +29,7 @@ defmodule MistWeb.Router do
       live "/profiles/:id", ProfileLive.Show, :show
       live "/profile/manage", ProfileLive.Manage, :index
       live "/profile/manage/follows", ProfileLive.ManageFollows, :index
-      live "/profile", UserProfile.Index, :index
     end
-
-    get "/home", PageController, :home
   end
 
   # Other scopes may use custom stacks.

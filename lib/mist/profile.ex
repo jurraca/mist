@@ -147,8 +147,8 @@ defmodule Mist.Profile do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
       tag_data =
-        for %Nostr.Tag{type: type, data: pubkey, info: info}
-            when type in [:p, "p"] and is_binary(pubkey) and pubkey != "" <- new_follows do
+        for %NostrCore.Tag{type: "p", data: pubkey, info: info}
+            when is_binary(pubkey) and pubkey != "" <- new_follows do
           relay =
             case info do
               [r | _] when is_binary(r) and r != "" -> r
@@ -198,6 +198,12 @@ defmodule Mist.Profile do
           end
 
         Repo.insert_all(Follows, follow_rows, on_conflict: :nothing)
+
+        Phoenix.PubSub.broadcast(
+          Mist.PubSub,
+          "profile:follow_list_updated",
+          {:follow_list_updated, follower_pubkey}
+        )
       end
     end
   end
@@ -301,7 +307,7 @@ defmodule Mist.Profile do
     )
   end
 
-  def create_profile_from_tag(%Nostr.Tag{data: pubkey, info: info}) do
+  def create_profile_from_tag(%NostrCore.Tag{data: pubkey, info: info}) do
     {profile_attrs, follow_attrs} =
       case info do
         [relay, petname] -> {%{pubkey: pubkey, relay: relay}, %{petname: petname}}
@@ -439,19 +445,19 @@ defmodule Mist.Profile do
 
         tags =
           Enum.map(public_follows, fn %{profile: followed, petname: petname} ->
-            relay = followed.relay || ""
-            petname = petname || followed.name || ""
-            ["p", followed.pubkey, relay, petname]
+            info =
+              [followed.relay, petname || followed.name]
+              |> Enum.map(&(&1 || ""))
+              |> Enum.reverse()
+              |> Enum.drop_while(&(&1 == ""))
+              |> Enum.reverse()
+
+            NostrCore.Tag.create!("p", followed.pubkey, info)
           end)
 
-        event_params =
-          NostrEx.create_event(3, %{
-            content: "",
-            tags: tags
-          })
-
-        with {:ok, event} <- Signer.sign_event(event_params),
-             :ok <- NostrEx.send_event(event) do
+        with {:ok, unsigned} <- NostrEx.create_event(3, content: "", tags: tags),
+             {:ok, event} <- Signer.sign_event(unsigned),
+             {:ok, _event_id, _failures} <- NostrEx.send_event(event) do
           {:ok, event}
         else
           error -> error

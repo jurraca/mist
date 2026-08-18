@@ -4,14 +4,14 @@ defmodule MistWeb.ProfileLive.Show do
   on_mount {MistWeb.LiveIdentity, :require_identity}
 
   alias Mist.Profile
-  alias Nostr.Bech32
+  alias NostrCore.Bech32
 
   @impl true
   def handle_params(%{"id" => id}, url, socket) do
     profile = Profile.get_profile!(id)
 
     npub =
-      case Bech32.hex_to_npub(profile.pubkey) do
+      case Bech32.npub(profile.pubkey) do
         {:ok, npub} -> npub
         _ -> profile.pubkey
       end
