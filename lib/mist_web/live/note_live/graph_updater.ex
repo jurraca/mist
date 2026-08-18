@@ -1,33 +1,50 @@
 defmodule MistWeb.NoteLive.GraphUpdater do
   @moduledoc """
-  Create and update the graph data.
+  Create and update the conversation graph data.
+
+  The graph only contains *conversations* (per PLAN.md: no notes without
+  replies). `from_notes/1` is fed pre-filtered conversation participants
+  (`Mist.Notes.list_conversations/3`). Live updates go through `flush/2`,
+  which admits a note only when it shares a reply edge with the existing
+  graph or with another candidate (held/batched) note — so a new
+  conversation can appear live (parent + reply promoted together) while
+  reply-less notes are held (and may be promoted later by a reply).
   """
 
-  def new(), do: %{nodes: [], links: []}
+  @held_limit 500
+
+  def new(), do: %{nodes: [], links: [], held: %{}}
 
   def from_notes(notes) do
     {nodes, links} = build_changes(notes)
-    %{nodes: nodes, links: valid_links(links, nodes)}
+    %{nodes: nodes, links: valid_links(links, nodes), held: %{}}
   end
 
   def queue(pending, note), do: [note | pending]
 
   def flush(graph, pending) do
     existing_ids = MapSet.new(graph.nodes, & &1.id)
-    unique = pending
+
+    unique =
+      pending
       |> Enum.reverse()
       |> Enum.uniq_by(& &1.id)
       |> Enum.reject(&MapSet.member?(existing_ids, &1.id))
-    {new_nodes, new_links} = build_changes(unique)
+      |> Enum.reject(&Map.has_key?(graph.held, &1.id))
 
-    # d3's forceLink throws on links referencing unknown nodes — only keep
-    # links whose endpoints exist in the merged node set.
-    updated_nodes = new_nodes ++ graph.nodes
-    valid_new_links = valid_links(new_links, updated_nodes)
+    {new_nodes, new_links, held} = add_conversation_nodes(graph, unique)
+
+    held =
+      if map_size(held) > @held_limit do
+        held |> Enum.take(@held_limit) |> Map.new()
+      else
+        held
+      end
 
     existing_link_keys = MapSet.new(graph.links, &{&1.source, &1.target})
-    unique_links = Enum.reject(valid_new_links, &MapSet.member?(existing_link_keys, {&1.source, &1.target}))
-    updated = %{nodes: updated_nodes, links: unique_links ++ graph.links}
+    unique_links = Enum.reject(new_links, &MapSet.member?(existing_link_keys, {&1.source, &1.target}))
+
+    updated = %{graph | nodes: new_nodes ++ graph.nodes, links: unique_links ++ graph.links, held: held}
     {updated, new_nodes, unique_links}
   end
 

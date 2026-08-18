@@ -9,6 +9,8 @@ defmodule MistWeb.NoteLive.Index do
   alias Mist.Subscriptions
   alias MistWeb.NoteLive.GraphUpdater
 
+  @default_lookback_seconds 86_400
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -31,7 +33,12 @@ defmodule MistWeb.NoteLive.Index do
 
     stored_notes = Notes.list_recent_by_pubkeys(follow_pubkeys)
 
-    initial_graph = GraphUpdater.from_notes(stored_notes)
+    lookback_seconds = @default_lookback_seconds
+
+    initial_graph =
+      follow_pubkeys
+      |> Notes.list_conversations(lookback_since(lookback_seconds))
+      |> GraphUpdater.from_notes()
 
     has_local_keypair = match?({:ok, _}, Keys.get_private_key())
     saved_subscriptions = Subscriptions.list_subscriptions()
@@ -47,6 +54,8 @@ defmodule MistWeb.NoteLive.Index do
       |> assign(:hashtag_filter, "")
       |> assign(:follow_lists, follow_lists)
       |> assign(:follow_pubkeys, follow_pubkeys)
+      |> assign(:source_pubkeys, MapSet.new(follow_pubkeys))
+      |> assign(:lookback_seconds, lookback_seconds)
       |> assign(:selected_list, nil)
       |> assign(:list_pubkeys, [])
       |> assign(:pending_graph_updates, [])
@@ -97,9 +106,10 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def handle_info(%{id: _, pubkey: _, content: _} = note_data, socket) do
-    new_socket = socket
-    |> stream_insert(:notes, note_data, at: 0)
-    |> queue_graph_update(note_data)
+    new_socket =
+      socket
+      |> stream_insert(:notes, note_data, at: 0)
+      |> maybe_queue_graph_update(note_data)
 
     {:noreply, new_socket}
   end
@@ -134,7 +144,7 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def handle_event("request_graph", _params, socket) do
-    {:noreply, push_event(socket, "graph_reset", socket.assigns.graph_data)}
+    {:noreply, push_event(socket, "graph_reset", Map.take(socket.assigns.graph_data, [:nodes, :links]))}
   end
 
   @impl true
@@ -161,6 +171,7 @@ defmodule MistWeb.NoteLive.Index do
           |> assign(:subscription_filter, {:list, list_id})
           |> assign(:selected_list, list_id)
           |> assign(:list_pubkeys, list_pubkeys)
+          |> assign(:source_pubkeys, MapSet.new(list_pubkeys))
           |> assign(:selected_subscription_id, nil)
           |> clear_ui_state()
           |> reload_notes_for_filter()
@@ -177,6 +188,7 @@ defmodule MistWeb.NoteLive.Index do
           |> assign(:subscription_filter, {:subscription, sub_id})
           |> assign(:selected_subscription_id, sub_id)
           |> assign(:selected_list, nil)
+          |> assign(:source_pubkeys, nil)
           |> clear_ui_state()
           |> reload_notes_for_filter()
 
@@ -193,11 +205,14 @@ defmodule MistWeb.NoteLive.Index do
             _              -> :all
           end
 
+        source_pubkeys = if filter_atom == :following, do: MapSet.new(socket.assigns.follow_pubkeys), else: nil
+
         socket =
           socket
           |> assign(:subscription_filter, filter_atom)
           |> assign(:selected_list, nil)
           |> assign(:selected_subscription_id, nil)
+          |> assign(:source_pubkeys, source_pubkeys)
           |> clear_ui_state()
           |> reload_notes_for_filter()
 
@@ -237,10 +252,12 @@ defmodule MistWeb.NoteLive.Index do
 
     socket
     |> stream(:notes, [], reset: true)
-    |> assign(:graph_data, %{nodes: [], links: []})
+    |> assign(:graph_data, GraphUpdater.new())
     |> assign(:pending_graph_updates, [])
     |> assign(:batch_timer_ref, nil)
   end
+
+  defp lookback_since(lookback_seconds), do: System.os_time(:second) - lookback_seconds
 
   defp reload_notes_for_filter(socket) do
     notes =
@@ -252,12 +269,24 @@ defmodule MistWeb.NoteLive.Index do
         _                       -> Notes.list_recent()
       end
 
-    graph = GraphUpdater.from_notes(notes)
+    # Network sources (following / custom lists) show conversations only;
+    # other sources fall back to a flat graph of the loaded notes.
+    graph =
+      case socket.assigns.source_pubkeys do
+        nil ->
+          GraphUpdater.from_notes(notes)
+
+        pubkeys ->
+          pubkeys
+          |> MapSet.to_list()
+          |> Notes.list_conversations(lookback_since(socket.assigns.lookback_seconds))
+          |> GraphUpdater.from_notes()
+      end
 
     socket
     |> stream(:notes, notes)
     |> assign(:graph_data, graph)
-    |> push_event("graph_reset", graph)
+    |> push_event("graph_reset", Map.take(graph, [:nodes, :links]))
     |> assign(:notes_empty_message, empty_state_message(socket.assigns, notes))
   end
 
@@ -416,6 +445,53 @@ defmodule MistWeb.NoteLive.Index do
 
   defp update_stream_counts(socket, note_id, counts) do
     push_event(socket, "update_note_counts", %{note_id: note_id, counts: counts})
+  end
+
+  # The graph only shows conversations from the current network source:
+  # drop live notes from outside the source pubkey set entirely, and let
+  # GraphUpdater hold anything that doesn't (yet) join a conversation.
+  defp maybe_queue_graph_update(socket, note) do
+    if in_scope?(socket.assigns, note.pubkey) do
+      socket
+      |> queue_reply_parents(note)
+      |> queue_graph_update(note)
+    else
+      socket
+    end
+  end
+
+  defp in_scope?(%{source_pubkeys: nil}, _pubkey), do: true
+  defp in_scope?(%{source_pubkeys: set}, pubkey), do: MapSet.member?(set, pubkey)
+
+  # If the note replies to parents we don't have in the graph (or held),
+  # fetch in-network parents from the DB and queue them first, so the
+  # conversation can form.
+  defp queue_reply_parents(socket, note) do
+    known_ids =
+      MapSet.new(socket.assigns.graph_data.nodes, & &1.id)
+      |> MapSet.union(MapSet.new(Map.keys(socket.assigns.graph_data.held)))
+
+    missing_parent_ids =
+      note.tags
+      |> Enum.filter(&(&1.type == "e" and is_binary(&1.data) and &1.data != ""))
+      |> Enum.map(& &1.data)
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(known_ids, &1))
+
+    if missing_parent_ids == [] do
+      socket
+    else
+      source_pubkeys = socket.assigns.source_pubkeys
+
+      parents =
+        if source_pubkeys do
+          Notes.by_event_ids(missing_parent_ids, MapSet.to_list(source_pubkeys))
+        else
+          []
+        end
+
+      Enum.reduce(parents, socket, fn parent, acc -> queue_graph_update(acc, parent) end)
+    end
   end
 
   defp queue_graph_update(socket, note) do

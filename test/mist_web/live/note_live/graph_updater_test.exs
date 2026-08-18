@@ -20,7 +20,7 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
 
   describe "new/0" do
     test "returns empty graph" do
-      assert GraphUpdater.new() == %{nodes: [], links: []}
+      assert GraphUpdater.new() == %{nodes: [], links: [], held: %{}}
     end
   end
 
@@ -55,7 +55,7 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
     end
 
     test "returns empty graph for empty list" do
-      assert GraphUpdater.from_notes([]) == %{nodes: [], links: []}
+      assert GraphUpdater.from_notes([]) == %{nodes: [], links: [], held: %{}}
     end
   end
 
@@ -75,13 +75,14 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
   end
 
   describe "flush/2" do
-    test "adds new notes to empty graph" do
+    test "holds reply-less notes (conversations only)" do
       graph = GraphUpdater.new()
       note = make_note("n1")
       {updated, new_nodes, new_links} = GraphUpdater.flush(graph, [note])
-      assert length(updated.nodes) == 1
-      assert length(new_nodes) == 1
+      assert updated.nodes == []
+      assert new_nodes == []
       assert new_links == []
+      assert Map.has_key?(updated.held, "n1")
     end
 
     test "deduplicates against existing graph nodes" do
@@ -94,10 +95,10 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
 
     test "deduplicates within pending batch" do
       graph = GraphUpdater.new()
-      note = make_note("n1")
-      {updated, new_nodes, _new_links} = GraphUpdater.flush(graph, [note, note])
-      assert length(updated.nodes) == 1
-      assert length(new_nodes) == 1
+      n1 = make_note("n1")
+      n2 = make_note("n2", "reply", [reply_tag("n1")])
+      {_updated, new_nodes, _links} = GraphUpdater.flush(graph, [n2, n2, n1])
+      assert length(new_nodes) == 2
     end
 
     test "deduplicates links against existing links" do
@@ -113,9 +114,11 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
       graph = GraphUpdater.new()
       reply = make_note("n2", "reply", [reply_tag("unknown-parent")])
       {updated, new_nodes, new_links} = GraphUpdater.flush(graph, [reply])
-      assert length(new_nodes) == 1
+      # conversations only: a reply to an unknown parent is held, not added
+      assert new_nodes == []
       assert new_links == []
       assert updated.links == []
+      assert Map.has_key?(updated.held, "n2")
     end
 
     test "keeps pending links when the parent already exists in the graph" do
@@ -129,11 +132,62 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
     test "reverses pending order so oldest-first" do
       graph = GraphUpdater.new()
       n1 = make_note("n1")
-      n2 = make_note("n2")
+      n2 = make_note("n2", "reply", [reply_tag("n1")])
       pending = [n2, n1]
       {updated, new_nodes, _} = GraphUpdater.flush(graph, pending)
       assert length(updated.nodes) == 2
       assert length(new_nodes) == 2
+    end
+
+    test "promotes a held note when its reply arrives later" do
+      graph = GraphUpdater.new()
+      parent = make_note("n1")
+      {held_graph, [], []} = GraphUpdater.flush(graph, [parent])
+      assert Map.has_key?(held_graph.held, "n1")
+
+      reply = make_note("n2", "reply", [reply_tag("n1")])
+      {updated, new_nodes, new_links} = GraphUpdater.flush(held_graph, [reply])
+
+      assert Enum.map(new_nodes, & &1.id) |> Enum.sort() == ["n1", "n2"]
+      assert new_links == [%{source: "n1", target: "n2", type: "reply"}]
+      assert updated.held == %{}
+    end
+
+    test "a whole new conversation chain joins together" do
+      graph = GraphUpdater.new()
+      root = make_note("n1")
+      mid = make_note("n2", "reply", [reply_tag("n1")])
+      leaf = make_note("n3", "reply", [reply_tag("n2")])
+      # all three arrive in one batch, newest first (as queued)
+      {_updated, new_nodes, new_links} = GraphUpdater.flush(graph, [leaf, mid, root])
+
+      assert length(new_nodes) == 3
+      assert length(new_links) == 2
+    end
+
+    test "replies to unknown parents stay held and do not join" do
+      graph = GraphUpdater.new()
+      reply = make_note("n2", "reply", [reply_tag("unknown")])
+      {updated, new_nodes, new_links} = GraphUpdater.flush(graph, [reply])
+      assert new_nodes == []
+      assert new_links == []
+      assert Map.has_key?(updated.held, "n2")
+    end
+
+    test "a second reply to the same unknown parent does not promote either" do
+      graph = GraphUpdater.new()
+      r1 = make_note("n2", "reply", [reply_tag("unknown")])
+      r2 = make_note("n3", "reply", [reply_tag("unknown")])
+      {updated, new_nodes, _links} = GraphUpdater.flush(graph, [r1, r2])
+      assert new_nodes == []
+      assert map_size(updated.held) == 2
+    end
+
+    test "held set is capped" do
+      graph = GraphUpdater.new()
+      notes = for i <- 1..510, do: make_note("n#{i}")
+      {updated, _, _} = GraphUpdater.flush(graph, notes)
+      assert map_size(updated.held) == 500
     end
   end
 

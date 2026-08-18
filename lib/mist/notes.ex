@@ -233,6 +233,23 @@ defmodule Mist.Notes do
   end
 
   @doc """
+  Fetches kind-1 notes by event ids, restricted to the given author pubkeys.
+  Used to resolve reply parents that arrived before the live session.
+  Returns [] immediately when either list is empty.
+  """
+  def by_event_ids([], _pubkeys), do: []
+  def by_event_ids(_ids, []), do: []
+
+  def by_event_ids(ids, pubkeys) do
+    from(e in Event,
+      where: e.kind == 1 and e.event_id in ^ids and e.pubkey in ^pubkeys,
+      preload: [:tags]
+    )
+    |> Mist.Repo.all()
+    |> assemble_notes()
+  end
+
+  @doc """
   Returns the 50 most recent kind-1 notes tagged with the given hashtag.
   Returns [] immediately when tag is blank.
   """
