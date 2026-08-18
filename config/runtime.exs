@@ -20,6 +20,9 @@ if System.get_env("PHX_SERVER") do
   config :mist, MistWeb.Endpoint, server: true
 end
 
+# Nostr identity private key — read at runtime so env changes don't require a recompile.
+config :mist, :private_key, System.get_env("NOSTR_PRIVKEY")
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
