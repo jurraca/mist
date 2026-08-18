@@ -40,7 +40,7 @@ defmodule MistWeb.NoteLive.Index do
       socket
       |> stream(:notes, stored_notes)
       |> assign(:graph_data, initial_graph)
-      |> assign(:view_mode, :list)
+      |> assign(:view_mode, :graph)
       |> assign(:subscription_filter, :following)
       |> assign(:available_relays, relays)
       |> assign(:selected_relay, nil)
