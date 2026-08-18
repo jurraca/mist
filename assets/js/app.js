@@ -29,36 +29,25 @@ let Hooks = {}
 Hooks.NetworkGraph = {
   mounted() {
     this.graph = new NetworkGraph(`#${this.el.id}`)
-    this.lastNodeCount = 0
-    this.updateGraph()
-    
-    // Listen for incremental node/link updates from the server
+
+    // The container is phx-update="ignore" (d3 owns its DOM), so the graph
+    // data is fetched once via this handshake and then kept up to date
+    // exclusively through push_event channels.
+    this.handleEvent("graph_reset", ({nodes, links}) => {
+      this.graph.render({nodes, links})
+    })
+
+    // Incremental node/link updates from the server
     this.handleEvent("graph_update", ({nodes, links}) => {
       this.graph.updateIncremental({nodes, links})
     })
-    
-    // Listen for count updates to existing nodes
+
+    // Count updates to existing nodes
     this.handleEvent("graph_count_update", ({note_id, counts}) => {
       this.graph.updateNodeCounts(note_id, counts)
     })
 
-    // Listen for filter resets from the server
-    this.handleEvent("graph_reset", ({nodes, links}) => {
-      this.graph.render({nodes, links})
-      this.lastNodeCount = nodes.length
-    })
-  },
-
-  updateGraph() {
-    const graphData = JSON.parse(this.el.dataset.graph)
-    this.lastNodeCount = graphData.nodes.length
-    
-    if (graphData.nodes.length > 0) {
-      this.graph.render(graphData)
-    } else if (graphData.nodes.length === 0) {
-      // Clear the graph when no nodes
-      this.graph.render({nodes: [], links: []})
-    }
+    this.pushEvent("request_graph", {})
   },
 
   destroyed() {

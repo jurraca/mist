@@ -98,12 +98,15 @@
   </.header>
 
   <div class="space-y-4">
+    <%!-- phx-update="ignore": the graph's DOM is owned by d3. Without this,
+        any server re-render would patch this (server-side empty) container
+        and wipe the client-created SVG. All updates flow via push_event. --%>
     <div
       :if={@view_mode == :graph}
       id="graph-container"
       class="bg-dark-secondary border border-dark-border rounded-lg min-h-[800px] overflow-auto"
       phx-hook="NetworkGraph"
-      data-graph={Jason.encode!(@graph_data)}
+      phx-update="ignore"
     >
     </div>
 

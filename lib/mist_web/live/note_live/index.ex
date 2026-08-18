@@ -133,6 +133,11 @@ defmodule MistWeb.NoteLive.Index do
   end
 
   @impl true
+  def handle_event("request_graph", _params, socket) do
+    {:noreply, push_event(socket, "graph_reset", socket.assigns.graph_data)}
+  end
+
+  @impl true
   def handle_event("toggle_view", %{"mode" => mode}, socket) do
     view_mode =
       case mode do

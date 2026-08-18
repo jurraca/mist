@@ -37,6 +37,28 @@ class NetworkGraph {
       .force("charge", d3.forceManyBody().strength(-300))
       .force("center", d3.forceCenter(this.width / 2, this.height / 2));
 
+    // Register the tick handler ONCE here. Selections are read dynamically
+    // (this.*) so later renders don't need to re-register — registering per
+    // render would accumulate stale handlers and multiply position updates.
+    this.simulation.on("tick", () => {
+      if (!this.nodeElements || !this.linkElements) return;
+
+      this.linkElements
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+
+      this.nodeElements
+        .attr("transform", d => `translate(${d.x},${d.y})`);
+
+      if (this.labelElements) {
+        this.labelElements
+          .attr("x", d => d.x)
+          .attr("y", d => d.y);
+      }
+    });
+
     // Create empty link and node groups
     this.svg.select("g").append("g").attr("class", "links");
     this.svg.select("g").append("g").attr("class", "nodes");
@@ -221,22 +243,6 @@ class NetworkGraph {
 
     // Update existing + new labels
     this.labelElements = labelEnter.merge(labelSelection);
-
-    // Update positions on tick
-    this.simulation.on("tick", () => {
-      this.linkElements
-        .attr("x1", d => d.source.x)
-        .attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x)
-        .attr("y2", d => d.target.y);
-
-      this.nodeElements
-        .attr("transform", d => `translate(${d.x},${d.y})`);
-
-      this.labelElements
-        .attr("x", d => d.x)
-        .attr("y", d => d.y);
-    });
   }
 
   processNotes(data) {
