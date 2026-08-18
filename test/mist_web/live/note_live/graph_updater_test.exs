@@ -33,11 +33,25 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
       assert graph.links == []
     end
 
-    test "builds links from reply tags" do
-      note = make_note("n2", "reply", [reply_tag("n1")])
-      graph = GraphUpdater.from_notes([note])
+    test "builds links from reply tags when both notes are present" do
+      n1 = make_note("n1")
+      n2 = make_note("n2", "reply", [reply_tag("n1")])
+      graph = GraphUpdater.from_notes([n1, n2])
       assert length(graph.links) == 1
       assert hd(graph.links) == %{source: "n1", target: "n2", type: "reply"}
+    end
+
+    test "drops links to notes not in the set (dangling links crash d3)" do
+      note = make_note("n2", "reply", [reply_tag("n1")])
+      graph = GraphUpdater.from_notes([note])
+      assert graph.links == []
+    end
+
+    test "ignores e-tags marked as mentions" do
+      n1 = make_note("n1")
+      n2 = make_note("n2", "mentions n1", [%{type: "e", data: "n1", info: ["mention"]}])
+      graph = GraphUpdater.from_notes([n1, n2])
+      assert graph.links == []
     end
 
     test "returns empty graph for empty list" do
@@ -93,6 +107,23 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
       {updated, _new_nodes, new_links} = GraphUpdater.flush(graph, [n2])
       assert new_links == []
       assert length(updated.links) == 1
+    end
+
+    test "drops pending links whose endpoints are unknown" do
+      graph = GraphUpdater.new()
+      reply = make_note("n2", "reply", [reply_tag("unknown-parent")])
+      {updated, new_nodes, new_links} = GraphUpdater.flush(graph, [reply])
+      assert length(new_nodes) == 1
+      assert new_links == []
+      assert updated.links == []
+    end
+
+    test "keeps pending links when the parent already exists in the graph" do
+      parent = make_note("n1")
+      graph = GraphUpdater.from_notes([parent])
+      reply = make_note("n2", "reply", [reply_tag("n1")])
+      {_updated, _new_nodes, new_links} = GraphUpdater.flush(graph, [reply])
+      assert new_links == [%{source: "n1", target: "n2", type: "reply"}]
     end
 
     test "reverses pending order so oldest-first" do

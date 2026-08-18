@@ -22,6 +22,27 @@ defmodule Mist.NotesTest do
     event
   end
 
+  defp reply_fixture(parent_id, attrs \\ %{}) do
+    attrs = Map.new(attrs)
+
+    event =
+      event_fixture(%{
+        kind: 1,
+        pubkey: Map.get(attrs, :pubkey, unique_pubkey()),
+        content: Map.get(attrs, :content, "reply"),
+        created_at: Map.get(attrs, :created_at, System.os_time(:second))
+      })
+
+    rest = if attrs[:mention], do: ["mention"], else: []
+
+    {:ok, _} =
+      Repo.insert(
+        Tags.changeset(%Tags{}, %{event_id: event.id, key: "e", value: parent_id, rest: rest})
+      )
+
+    event
+  end
+
   describe "counts_for/1" do
     test "returns empty map for no note ids" do
       assert Notes.counts_for([]) == %{}
@@ -136,6 +157,131 @@ defmodule Mist.NotesTest do
       note = event_fixture(%{pubkey: author.pubkey})
 
       assert %{author: "alice", bot: false} = Notes.note_view(note)
+    end
+  end
+
+  describe "list_conversations/3" do
+    test "returns empty list for empty pubkeys" do
+      assert Notes.list_conversations([], System.os_time(:second) - 3600) == []
+    end
+
+    test "returns parent and reply when they reply to each other in-network" do
+      author = profile_fixture()
+      parent = event_fixture(%{pubkey: author.pubkey, content: "parent"})
+      reply = reply_fixture(parent.event_id, pubkey: author.pubkey)
+
+      since = System.os_time(:second) - 3600
+      views = Notes.list_conversations([author.pubkey], since)
+
+      assert length(views) == 2
+      ids = Enum.map(views, & &1.id)
+      assert parent.event_id in ids
+      assert reply.event_id in ids
+    end
+
+    test "excludes notes without replies" do
+      author = profile_fixture()
+      _lonely = event_fixture(%{pubkey: author.pubkey, content: "no replies"})
+
+      since = System.os_time(:second) - 3600
+      assert Notes.list_conversations([author.pubkey], since) == []
+    end
+
+    test "excludes replies to notes outside the network" do
+      friend = profile_fixture()
+      rando = profile_fixture()
+      parent_by_rando = event_fixture(%{pubkey: rando.pubkey})
+      _reply_by_friend = reply_fixture(parent_by_rando.event_id, pubkey: friend.pubkey)
+
+      since = System.os_time(:second) - 3600
+      assert Notes.list_conversations([friend.pubkey], since) == []
+    end
+
+    test "includes parents older than the window when in-network" do
+      author = profile_fixture()
+      now = System.os_time(:second)
+      old_parent = event_fixture(%{pubkey: author.pubkey, created_at: now - 7200})
+      _recent_reply = reply_fixture(old_parent.event_id, pubkey: author.pubkey, created_at: now)
+
+      views = Notes.list_conversations([author.pubkey], now - 3600)
+
+      assert length(views) == 2
+      assert old_parent.event_id in Enum.map(views, & &1.id)
+    end
+
+    test "excludes conversations entirely outside the window" do
+      author = profile_fixture()
+      now = System.os_time(:second)
+      old_parent = event_fixture(%{pubkey: author.pubkey, created_at: now - 7200})
+      _old_reply = reply_fixture(old_parent.event_id, pubkey: author.pubkey, created_at: now - 7000)
+
+      assert Notes.list_conversations([author.pubkey], now - 3600) == []
+    end
+
+    test "mention edges do not make a conversation" do
+      author = profile_fixture()
+      parent = event_fixture(%{pubkey: author.pubkey})
+      _mention = reply_fixture(parent.event_id, pubkey: author.pubkey, mention: true)
+
+      since = System.os_time(:second) - 3600
+      assert Notes.list_conversations([author.pubkey], since) == []
+    end
+
+    test "participants carry DB-computed counts" do
+      author = profile_fixture()
+      parent = event_fixture(%{pubkey: author.pubkey})
+      _reply = reply_fixture(parent.event_id, pubkey: author.pubkey)
+      interaction_fixture(7, parent.event_id)
+
+      since = System.os_time(:second) - 3600
+      views = Notes.list_conversations([author.pubkey], since)
+
+      parent_view = Enum.find(views, &(&1.id == parent.event_id))
+      assert parent_view.reaction_count == 1
+    end
+
+    test "results are ordered newest first" do
+      author = profile_fixture()
+      now = System.os_time(:second)
+      parent = event_fixture(%{pubkey: author.pubkey, created_at: now - 100})
+      _reply = reply_fixture(parent.event_id, pubkey: author.pubkey, created_at: now)
+
+      views = Notes.list_conversations([author.pubkey], now - 3600)
+
+      assert [first, _second] = views
+      assert first.created_at >= List.last(views).created_at
+    end
+  end
+
+  describe "conversation_edges/1" do
+    test "builds deduplicated edges from e-tags" do
+      parent = event_fixture()
+      reply = reply_fixture(parent.event_id)
+
+      edges = Notes.conversation_edges(Repo.preload([parent, reply], :tags))
+
+      assert edges == [%{source: parent.event_id, target: reply.event_id, type: "reply"}]
+    end
+
+    test "skips mentions and empty tag values" do
+      parent = event_fixture()
+      mention = reply_fixture(parent.event_id, mention: true)
+
+      empty_tag_event = event_fixture()
+
+      {1, _} =
+        Repo.insert_all(Tags, [%{event_id: empty_tag_event.id, key: "e", value: "", rest: []}])
+
+      edges =
+        Notes.conversation_edges(Repo.preload([parent, mention, empty_tag_event], :tags))
+
+      assert edges == []
+    end
+
+    test "includes edges whose source is outside the given set (caller filters)" do
+      reply = reply_fixture("some-external-parent")
+      edges = Notes.conversation_edges(Repo.preload([reply], :tags))
+      assert [%{source: "some-external-parent", target: _, type: "reply"}] = edges
     end
   end
 

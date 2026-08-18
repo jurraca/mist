@@ -154,6 +154,85 @@ defmodule Mist.Notes do
   end
 
   @doc """
+  Reply edges (non-mention `e` tags) among a list of stored, tag-preloaded
+  events. Returns deduplicated `%{source, target, type: "reply"}` maps where
+  `source` is the referenced (parent) note id and `target` the replying note.
+
+  Edges whose source is not among the given events are included — filter
+  against your node set (see `list_conversations/3`).
+  """
+  def conversation_edges(events) when is_list(events) do
+    for event <- events,
+        tag <- event.tags,
+        tag.key == "e",
+        is_binary(tag.value) and tag.value != "",
+        not mention_tag?(tag),
+        uniq: true do
+      %{source: tag.value, target: event.event_id, type: "reply"}
+    end
+  end
+
+  defp mention_tag?(%Tags{rest: rest}), do: "mention" in (rest || [])
+
+  @doc """
+  Returns conversation participants for the graph UI: kind-1 notes authored by
+  the given pubkeys, created within the lookback window (`since_unix`), that
+  have at least one reply edge to or from another note in the result set.
+
+  Parent notes referenced by in-window replies are included even when older
+  than the window, as long as they are authored by the given pubkeys (network
+  only — no randos). Mentions (`e` tags marked "mention") do not count as
+  reply edges. Reads only the DB; never triggers relay fetches.
+  """
+  def list_conversations(pubkeys, since_unix, opts \\ [])
+
+  def list_conversations([], _since_unix, _opts), do: []
+
+  def list_conversations(pubkeys, since_unix, opts) when is_integer(since_unix) do
+    limit = Keyword.get(opts, :limit, 500)
+
+    window_notes =
+      from(e in Event,
+        where: e.kind == 1 and e.pubkey in ^pubkeys and e.created_at >= ^since_unix,
+        order_by: [desc: e.created_at],
+        limit: ^limit,
+        preload: [:tags]
+      )
+      |> Mist.Repo.all()
+
+    window_ids = MapSet.new(window_notes, & &1.event_id)
+
+    parent_ids =
+      window_notes
+      |> conversation_edges()
+      |> Enum.map(& &1.source)
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(window_ids, &1))
+
+    parents =
+      from(e in Event,
+        where: e.kind == 1 and e.event_id in ^parent_ids and e.pubkey in ^pubkeys,
+        preload: [:tags]
+      )
+      |> Mist.Repo.all()
+
+    all = window_notes ++ parents
+    all_ids = MapSet.new(all, & &1.event_id)
+
+    participant_ids =
+      all
+      |> conversation_edges()
+      |> Enum.filter(&MapSet.member?(all_ids, &1.source))
+      |> Enum.flat_map(&[&1.source, &1.target])
+      |> MapSet.new()
+
+    all
+    |> Enum.filter(&MapSet.member?(participant_ids, &1.event_id))
+    |> Enum.sort_by(& &1.created_at, :desc)
+    |> assemble_notes()
+  end
+
+  @doc """
   Returns the 50 most recent kind-1 notes tagged with the given hashtag.
   Returns [] immediately when tag is blank.
   """
