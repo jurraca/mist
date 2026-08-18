@@ -43,10 +43,16 @@ defmodule Mist.Relay do
   Connect to the given relay URLs concurrently.
 
   Returns the list of URLs that connected successfully.
+
+  Tasks are started with `Task.Supervisor.async_nolink/2`: a raising or
+  hanging connect (e.g. a GenServer.call timeout inside NostrEx) must never
+  propagate an exit into the calling GenServer (SubManager, Initializer).
   """
   def connect_relays(relay_list) when is_list(relay_list) do
     tasks =
-      Enum.map(relay_list, fn url -> {url, Task.async(fn -> NostrEx.connect(url) end)} end)
+      Enum.map(relay_list, fn url ->
+        {url, Task.Supervisor.async_nolink(Mist.TaskSupervisor, fn -> NostrEx.connect(url) end)}
+      end)
 
     url_by_ref = Map.new(tasks, fn {url, task} -> {task.ref, url} end)
 
@@ -61,7 +67,7 @@ defmodule Mist.Relay do
           [url]
 
         {:ok, {:error, reason}} ->
-          Logger.warning("Relay.connect: could not connect to #{url}: #{reason}")
+          Logger.warning("Relay.connect: could not connect to #{url}: #{inspect(reason)}")
           []
 
         {:exit, reason} ->

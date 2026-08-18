@@ -49,10 +49,10 @@ defmodule Mist.Nostr.EventTest do
       assert %{kind: ["can't be blank"]} = errors_on(changeset)
     end
 
-    test "requires content" do
+    test "allows blank content (kinds 6/7/9735 may have empty content)" do
       attrs = Map.delete(@valid_attrs, :content)
       changeset = Event.changeset(%Event{}, attrs)
-      assert %{content: ["can't be blank"]} = errors_on(changeset)
+      refute Map.has_key?(errors_on(changeset), :content)
     end
 
     test "requires sig" do

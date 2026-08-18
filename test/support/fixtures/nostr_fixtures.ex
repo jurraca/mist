@@ -55,14 +55,14 @@ defmodule Mist.NostrFixtures do
     follow
   end
 
-  def user_relay_fixture(pubkey, relay_url) do
-    profile = profile_fixture(%{pubkey: pubkey})
+  def user_relay_fixture(pubkey, relay_url, purpose \\ :rw) do
+    {:ok, profile} = Mist.Profile.get_or_create_profile(pubkey)
     {:ok, relay} = Mist.Relay.get_or_create_relay(relay_url)
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     Mist.Repo.insert_all(
       Mist.Profile.UserRelays,
-      [%{relay_id: relay.id, pubkey: pubkey, profile_id: profile.id, purpose: :rw, inserted_at: now, updated_at: now}],
+      [%{relay_id: relay.id, pubkey: pubkey, profile_id: profile.id, purpose: purpose, inserted_at: now, updated_at: now}],
       on_conflict: :nothing
     )
   end

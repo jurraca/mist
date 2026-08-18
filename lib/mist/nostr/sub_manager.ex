@@ -35,7 +35,7 @@ defmodule Mist.Nostr.SubManager do
 
   @pubsub Mist.PubSub
 
-  @feed_kinds [1, 6, 7]
+  @feed_kinds [1, 6, 7, 9735]
   @chunk_size 200
   @reconcile_debounce 1_000
   @tick_interval 5 * 60 * 1_000
@@ -145,9 +145,8 @@ defmodule Mist.Nostr.SubManager do
 
   @impl GenServer
   def handle_cast({:subscribe, filters, opts}, state) do
-    {sub, send_opts} = prepare_subscription(filters, opts)
-
-    with :ok <- NostrEx.listen(sub),
+    with {:ok, {sub, send_opts}} <- prepare_subscription(filters, opts),
+         :ok <- NostrEx.listen(sub),
          {:ok, _sub_id} <- NostrEx.send_sub(sub, send_opts) do
       Logger.debug("SubManager: created subscription #{sub.id}")
     else
@@ -160,9 +159,9 @@ defmodule Mist.Nostr.SubManager do
 
   def handle_cast({:subscribe_named, name, filters, opts}, state) do
     state = cancel_named_sub(state, name)
-    {sub, send_opts} = prepare_subscription(filters, opts)
 
-    with :ok <- NostrEx.listen(sub),
+    with {:ok, {sub, send_opts}} <- prepare_subscription(filters, opts),
+         :ok <- NostrEx.listen(sub),
          {:ok, _sub_id} <- NostrEx.send_sub(sub, send_opts) do
       Logger.debug("SubManager: created named subscription #{name} -> #{sub.id}")
       {:noreply, %{state | named: Map.put(state.named, name, sub.id)}}
@@ -239,6 +238,14 @@ defmodule Mist.Nostr.SubManager do
     {:noreply, state}
   end
 
+  # Relay-initiated CLOSE (rate limit, filter rejection, ...). Evict the sub
+  # from state; the next reconcile tick reopens feed subs, and the UI
+  # re-creates named subs on its next apply.
+  def handle_info({:close, sub_id, relay_host}, state) do
+    Logger.info("SubManager: #{relay_host} closed sub #{String.slice(sub_id, 0, 8)}")
+    {:noreply, evict_sub(state, relay_host, sub_id)}
+  end
+
   def handle_info(msg, state) do
     Logger.debug("SubManager: unhandled message #{inspect(msg)}")
     {:noreply, state}
@@ -266,7 +273,11 @@ defmodule Mist.Nostr.SubManager do
   @doc false
   def desired_feeds(identity) when is_binary(identity) do
     follows = follow_profiles(identity)
-    by_relay = Profile.get_write_relays_by_relay(follows)
+
+    by_relay =
+      follows
+      |> Profile.get_write_relays_by_relay()
+      |> Map.filter(fn {relay, _} -> valid_relay_url?(relay) end)
 
     covered = by_relay |> Map.values() |> List.flatten() |> MapSet.new()
 
@@ -275,10 +286,7 @@ defmodule Mist.Nostr.SubManager do
       |> Enum.map(& &1.pubkey)
       |> Enum.reject(&MapSet.member?(covered, &1))
 
-    desired =
-      by_relay
-      |> Map.new(fn {relay, pubkeys} -> {relay, MapSet.new(pubkeys)} end)
-      |> Map.filter(fn {relay, _} -> valid_relay_url?(relay) end)
+    desired = Map.new(by_relay, fn {relay, pubkeys} -> {relay, MapSet.new(pubkeys)} end)
 
     Enum.reduce(uncovered, desired, fn pubkey, acc ->
       Enum.reduce(fallback_relays(), acc, fn relay, acc2 ->
@@ -399,6 +407,25 @@ defmodule Mist.Nostr.SubManager do
     end
   end
 
+  defp evict_sub(state, relay_host, sub_id) do
+    feed_url =
+      Enum.find(Map.keys(state.feed), fn url -> Relay.relay_name(url) == relay_host end)
+
+    feed =
+      if feed_url do
+        subs = Map.delete(state.feed[feed_url], sub_id)
+        if map_size(subs) == 0, do: Map.delete(state.feed, feed_url), else: Map.put(state.feed, feed_url, subs)
+      else
+        state.feed
+      end
+
+    named =
+      Map.new(state.named, fn {name, id} -> {name, id} end)
+      |> Map.reject(fn {_name, id} -> id == sub_id end)
+
+    %{state | feed: feed, named: named}
+  end
+
   defp cancel_named_sub(state, name) do
     case Map.get(state.named, name) do
       nil ->
@@ -414,13 +441,13 @@ defmodule Mist.Nostr.SubManager do
   defp prepare_subscription(%NostrEx.Subscription{} = sub, opts) do
     relay_opt = opts[:relays] || opts[:send_via]
     send_opts = if relay_opt, do: [send_via: relay_opt], else: []
-    {sub, send_opts}
+    {:ok, {sub, send_opts}}
   end
 
   defp prepare_subscription(filters, opts) when is_list(filters) do
     case NostrEx.create_sub(filters) do
       {:ok, sub} -> prepare_subscription(sub, opts)
-      {:error, reason} -> raise ArgumentError, "invalid subscription filters: #{inspect(reason)}"
+      {:error, reason} -> {:error, reason}
     end
   end
 end

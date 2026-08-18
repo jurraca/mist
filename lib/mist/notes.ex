@@ -1,11 +1,13 @@
 defmodule Mist.Notes do
   import Ecto.Query
 
-  alias Mist.Nostr.Event
+  alias Mist.Nostr.{Event, Tags}
   alias Mist.Profile.Profile
 
   @default_since_window Application.compile_env(:mist, :subscription_since_window, 86_400)
   @default_limit Application.compile_env(:mist, :subscription_limit, 500)
+
+  @interaction_kinds [6, 7, 9735]
 
   def publish(content) when is_binary(content) do
     alias Mist.Nostr.{Signer, EventHandler}
@@ -67,6 +69,59 @@ defmodule Mist.Notes do
   end
 
   def default_limit, do: @default_limit
+
+  @doc """
+  Interaction counts (reactions kind 7, boosts kind 6, zaps kind 9735) for the
+  given note ids, computed from the DB. Returns `%{note_id => counts_map}`;
+  notes without interactions are absent from the map.
+
+  TODO: zap amounts are currently counted as a flat 1000 sats per zap receipt;
+  real amounts require bolt11 parsing.
+  """
+  def counts_for(note_ids) when is_list(note_ids) do
+    if note_ids == [] do
+      %{}
+    else
+      from(t in Tags,
+        join: e in Event,
+        on: t.event_id == e.id,
+        where: t.key == "e" and t.value in ^note_ids and e.kind in ^@interaction_kinds,
+        group_by: [t.value, e.kind],
+        select: {t.value, e.kind, count(e.id)}
+      )
+      |> Mist.Repo.all()
+      |> Enum.reduce(%{}, fn {note_id, kind, count}, acc ->
+        counts = Map.get(acc, note_id, zero_counts())
+        Map.put(acc, note_id, add_count(counts, kind, count))
+      end)
+    end
+  end
+
+  def zero_counts, do: %{reaction_count: 0, boost_count: 0, zap_amount: 0}
+
+  defp add_count(counts, 7, n), do: %{counts | reaction_count: counts.reaction_count + n}
+  defp add_count(counts, 6, n), do: %{counts | boost_count: counts.boost_count + n}
+  # TODO: parse the bolt11 tag for real zap amounts
+  defp add_count(counts, 9735, n), do: %{counts | zap_amount: counts.zap_amount + n * 1000}
+
+  @doc """
+  The single canonical note shape consumed by the UI (list stream, graph,
+  live broadcasts). Accepts a stored `%Mist.Nostr.Event{}` (tags preloaded) or
+  a freshly received `%NostrCore.Event{}`. Does its own profile/count lookups —
+  use `assemble_notes/1` for batches.
+  """
+  def note_view(%NostrCore.Event{} = event) do
+    profile = Mist.Repo.get_by(Profile, pubkey: event.pubkey)
+    counts = counts_for([event.id]) |> Map.get(event.id, zero_counts())
+    build_note_view(event, profile, counts)
+  end
+
+  def note_view(%Event{} = event) do
+    event = Mist.Repo.preload(event, :tags)
+    profile = Mist.Repo.get_by(Profile, pubkey: event.pubkey)
+    counts = counts_for([event.event_id]) |> Map.get(event.event_id, zero_counts())
+    build_note_view(event, profile, counts)
+  end
 
   @doc """
   Returns the 50 most recent kind-1 notes, with author profiles batch-loaded.
@@ -135,29 +190,47 @@ defmodule Mist.Notes do
       |> Mist.Repo.all()
       |> Map.new(fn p -> {p.pubkey, p} end)
 
+    counts_map = counts_for(Enum.map(events, & &1.event_id))
+
     Enum.map(events, fn event ->
-      profile = Map.get(profile_map, event.pubkey)
-
-      tags =
-        Enum.map(event.tags, fn t ->
-          %{type: t.key, data: t.value, info: t.rest || []}
-        end)
-
-      %{
-        id: event.event_id,
-        pubkey: event.pubkey,
-        content: event.content,
-        created_at: event.created_at,
-        sig: event.sig,
-        kind: event.kind,
-        tags: tags,
-        author: if(profile, do: profile.name, else: nil),
-        bot: if(profile, do: profile.bot, else: false),
-        reaction_count: 0,
-        boost_count: 0,
-        zap_amount: 0
-      }
+      build_note_view(
+        event,
+        Map.get(profile_map, event.pubkey),
+        Map.get(counts_map, event.event_id, zero_counts())
+      )
     end)
+  end
+
+  defp build_note_view(event, profile, counts) do
+    %{
+      id: event_id(event),
+      pubkey: event.pubkey,
+      content: event.content || "",
+      created_at: unix_created_at(event),
+      sig: event.sig,
+      kind: event.kind,
+      tags: normalize_tags(event),
+      author: if(profile, do: profile.name, else: nil),
+      bot: if(profile, do: profile.bot, else: false),
+      reaction_count: counts.reaction_count,
+      boost_count: counts.boost_count,
+      zap_amount: counts.zap_amount
+    }
+  end
+
+  defp event_id(%NostrCore.Event{id: id}), do: id
+  defp event_id(%Event{event_id: id}), do: id
+
+  defp unix_created_at(%NostrCore.Event{created_at: %DateTime{} = dt}), do: DateTime.to_unix(dt)
+  defp unix_created_at(%NostrCore.Event{created_at: nil}), do: nil
+  defp unix_created_at(%Event{created_at: ts}), do: ts
+
+  defp normalize_tags(%NostrCore.Event{tags: tags}) do
+    Enum.map(tags, fn t -> %{type: t.type, data: t.data, info: t.info || []} end)
+  end
+
+  defp normalize_tags(%Event{tags: tags}) do
+    Enum.map(tags, fn t -> %{type: t.key, data: t.value, info: t.rest || []} end)
   end
 
   defp maybe_filter_kinds(query, []), do: query
