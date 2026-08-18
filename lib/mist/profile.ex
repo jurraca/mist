@@ -6,7 +6,7 @@ defmodule Mist.Profile do
   import Ecto.Query, warn: false
   alias Mist.Repo
 
-  alias Mist.Nostr.Dispatcher
+  alias Mist.Nostr.SubManager
   alias Mist.Profile.{Follows, Profile, UserRelays}
   alias Mist.Relay
 
@@ -116,7 +116,7 @@ defmodule Mist.Profile do
   end
 
   def fetch_follows(pubkey) do
-    Dispatcher.subscribe_follows(pubkey)
+    SubManager.subscribe_follows(pubkey)
     {:ok, pubkey}
   end
 
@@ -254,7 +254,17 @@ defmodule Mist.Profile do
           end)
           |> Enum.reject(&is_nil/1)
 
-        Repo.insert_all(UserRelays, relay_attrs, on_conflict: {:replace_all_except, [:id]})
+        result = Repo.insert_all(UserRelays, relay_attrs, on_conflict: {:replace_all_except, [:id]})
+
+        if relay_attrs != [] do
+          Phoenix.PubSub.broadcast(
+            Mist.PubSub,
+            "profile:user_relays_updated",
+            {:user_relays_updated, pubkey}
+          )
+        end
+
+        result
     end
   end
 

@@ -23,8 +23,7 @@ defmodule Mist.Application do
         else
           [
             {Mist.Nostr.Signer, signing_method: :local},
-            Mist.Nostr.Dispatcher,
-            Mist.Nostr.SubscriptionPlanner,
+            Mist.Nostr.SubManager,
             Mist.Nostr.Initializer,
             Mist.Jobs.FindUserRelays
           ]

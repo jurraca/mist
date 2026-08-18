@@ -4,7 +4,7 @@ defmodule Mist.Nostr.EventHandler do
   """
 
   require Logger
-  alias Nostr.Event
+  alias NostrCore.Event
   alias Mist.Profile
 
   @doc """

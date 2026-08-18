@@ -4,10 +4,14 @@ defmodule Mist.Relay do
   """
 
   import Ecto.Query, warn: false
+  require Logger
+
   alias Mist.Repo
 
   alias Mist.Relay.Info
   alias Mist.Relay.Metadata
+
+  @connect_timeout 5_000
 
   @doc """
   Returns the list of relays with preloaded metadata.
