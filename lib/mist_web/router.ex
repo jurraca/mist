@@ -19,16 +19,21 @@ defmodule MistWeb.Router do
 
     live_session :app do
       live "/welcome", WelcomeLive, :index
-      live "/", NoteLive.Index, :index
       live "/relays", RelayLive.Index, :index
       live "/relays/new", RelayLive.Index, :new
       live "/subscriptions", SubscriptionLive.Index, :index
-      live "/notes", NoteLive.Index, :index
-      live "/notes/new", NoteLive.Index, :new
       live "/profiles", ProfileLive.Index, :index
       live "/profiles/:id", ProfileLive.Show, :show
       live "/profile/manage", ProfileLive.Manage, :index
       live "/profile/manage/follows", ProfileLive.ManageFollows, :index
+    end
+
+    # The notes feed uses a full-bleed layout so the conversation graph can
+    # fill the viewport; list view centers its own content.
+    live_session :notes, layout: {MistWeb.Layouts, :graph} do
+      live "/", NoteLive.Index, :index
+      live "/notes", NoteLive.Index, :index
+      live "/notes/new", NoteLive.Index, :new
     end
   end
 

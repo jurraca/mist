@@ -25,16 +25,55 @@ import topbar from "../vendor/topbar"
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 import "./network_graph.js"
 
+function formatRelativeTime(unixSeconds) {
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds)
+  if (seconds < 60) return "just now"
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 let Hooks = {}
 Hooks.NetworkGraph = {
   mounted() {
     this.graph = new NetworkGraph(`#${this.el.id}`)
 
+    // Hover sidebar: filled client-side from the node payload (full content,
+    // author, counts) — no server roundtrip. Sticky until the next hover.
+    const sidebar = {
+      placeholder: document.getElementById("graph-sidebar-placeholder"),
+      content: document.getElementById("graph-sidebar-content"),
+      author: document.getElementById("graph-sidebar-author"),
+      time: document.getElementById("graph-sidebar-time"),
+      body: document.getElementById("graph-sidebar-body"),
+      stats: document.getElementById("graph-sidebar-stats"),
+      id: document.getElementById("graph-sidebar-id")
+    }
+
+    this.graph.onNodeHover = (d) => {
+      if (!sidebar.content) return
+      sidebar.placeholder.classList.add("hidden")
+      sidebar.content.classList.remove("hidden")
+      sidebar.author.textContent = d.author || `${d.pubkey.slice(0, 12)}…`
+      sidebar.time.textContent = d.created_at ? formatRelativeTime(d.created_at) : ""
+      sidebar.body.textContent = d.content || ""
+
+      const stats = []
+      if (d.reaction_count > 0) stats.push(`❤️ ${d.reaction_count}`)
+      if (d.boost_count > 0) stats.push(`🔄 ${d.boost_count}`)
+      if (d.zap_amount > 0) stats.push(`⚡ ${d.zap_amount} sats`)
+      sidebar.stats.textContent = stats.join("   ")
+      sidebar.id.textContent = `event ${d.id.slice(0, 12)}…`
+    }
+
     // The container is phx-update="ignore" (d3 owns its DOM), so the graph
     // data is fetched once via this handshake and then kept up to date
     // exclusively through push_event channels.
-    this.handleEvent("graph_reset", ({nodes, links}) => {
-      this.graph.render({nodes, links})
+    this.handleEvent("graph_reset", ({nodes, links, window_seconds}) => {
+      this.graph.render({nodes, links, window_seconds})
     })
 
     // Incremental node/link updates from the server

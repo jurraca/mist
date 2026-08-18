@@ -1,210 +1,231 @@
-<div class="mx-auto max-w-4xl">
-  <.header class="mb-8">
-    <span class="text-neon-green">Notes</span>
-    <:actions>
-      <div class="flex items-center gap-4 flex-wrap">
-        <!-- Subscription Filter Dropdown -->
-        <form phx-change="change_subscription_filter" class="flex items-center gap-2">
-          <label class="text-xs font-medium text-text-muted uppercase tracking-wider">
-            Source
-          </label>
-          <select 
-            name="filter"
-            class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+<div class="h-full flex flex-col">
+  <!-- Toolbar -->
+  <div class="flex items-center gap-4 flex-wrap px-4 py-2 bg-dark-secondary border-b border-dark-border">
+    <!-- Subscription Filter Dropdown -->
+    <form phx-change="change_subscription_filter" class="flex items-center gap-2">
+      <label class="text-xs font-medium text-text-muted uppercase tracking-wider">
+        Source
+      </label>
+      <select
+        name="filter"
+        class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+      >
+        <option value="all" selected={@subscription_filter == :all}>All Relays</option>
+        <option value="single_relay" selected={@subscription_filter == :single_relay}>Single Relay</option>
+        <option value="following" selected={@subscription_filter == :following}>Following</option>
+        <optgroup :if={length(@follow_lists) > 0} label="Custom Lists">
+          <option
+            :for={list <- @follow_lists}
+            value={"list:#{list.id}"}
+            selected={@selected_list == list.id}
           >
-            <option value="all" selected={@subscription_filter == :all}>All Relays</option>
-            <option value="single_relay" selected={@subscription_filter == :single_relay}>Single Relay</option>
-            <option value="following" selected={@subscription_filter == :following}>Following</option>
-            <optgroup :if={length(@follow_lists) > 0} label="Custom Lists">
-              <option
-                :for={list <- @follow_lists}
-                value={"list:#{list.id}"}
-                selected={@selected_list == list.id}
-              >
-                📋 {list.name}
-              </option>
-            </optgroup>
-            <option value="hashtag" selected={@subscription_filter == :hashtag}>Hashtag</option>
-            <optgroup :if={length(@saved_subscriptions) > 0} label="Subscriptions">
-              <option
-                :for={sub <- @saved_subscriptions}
-                value={"subscription:#{sub.id}"}
-                selected={@selected_subscription_id == sub.id}
-              >
-                🔖 {sub.name}
-              </option>
-            </optgroup>
-          </select>
-        </form>
-
-        <!-- Relay Selector (shown when single_relay is selected) -->
-        <form :if={@subscription_filter == :single_relay} phx-change="change_relay" class="flex items-center gap-2">
-          <select 
-            name="relay_url"
-            class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+            📋 {list.name}
+          </option>
+        </optgroup>
+        <option value="hashtag" selected={@subscription_filter == :hashtag}>Hashtag</option>
+        <optgroup :if={length(@saved_subscriptions) > 0} label="Subscriptions">
+          <option
+            :for={sub <- @saved_subscriptions}
+            value={"subscription:#{sub.id}"}
+            selected={@selected_subscription_id == sub.id}
           >
-            <option value="">Select Relay</option>
-            <option :for={relay_url <- @available_relays} value={relay_url} selected={@selected_relay == relay_url}>
-              {relay_url}
-            </option>
-          </select>
-        </form>
+            🔖 {sub.name}
+          </option>
+        </optgroup>
+      </select>
+    </form>
 
-        <!-- Hashtag Input (shown when hashtag is selected) -->
-        <form :if={@subscription_filter == :hashtag} phx-change="change_hashtag" class="flex items-center gap-2">
-          <input 
-            phx-debounce="500"
-            name="hashtag"
-            type="text"
-            placeholder="#bitcoin"
-            value={@hashtag_filter}
-            class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green w-32"
-          />
-        </form>
+    <!-- Relay Selector (shown when single_relay is selected) -->
+    <form :if={@subscription_filter == :single_relay} phx-change="change_relay" class="flex items-center gap-2">
+      <select
+        name="relay_url"
+        class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green"
+      >
+        <option value="">Select Relay</option>
+        <option :for={relay_url <- @available_relays} value={relay_url} selected={@selected_relay == relay_url}>
+          {relay_url}
+        </option>
+      </select>
+    </form>
 
-        <!-- View Mode Toggle -->
-        <div class="flex bg-dark-tertiary rounded-lg p-1">
-          <button
-            phx-click="toggle_view"
-            phx-value-mode="list"
-            class={[
-              "px-3 py-1 rounded text-sm transition-all",
-              (@view_mode == :list && "bg-neon-green text-dark-primary") ||
-                "text-text-secondary hover:text-text-primary"
-            ]}
-          >
-            List
-          </button>
-          <button
-            phx-click="toggle_view"
-            phx-value-mode="graph"
-            class={[
-              "px-3 py-1 rounded text-sm transition-all",
-              (@view_mode == :graph && "bg-neon-green text-dark-primary") ||
-                "text-text-secondary hover:text-text-primary"
-            ]}
-          >
-            Graph
-          </button>
-        </div>
+    <!-- Hashtag Input (shown when hashtag is selected) -->
+    <form :if={@subscription_filter == :hashtag} phx-change="change_hashtag" class="flex items-center gap-2">
+      <input
+        phx-debounce="500"
+        name="hashtag"
+        type="text"
+        placeholder="#bitcoin"
+        value={@hashtag_filter}
+        class="bg-dark-tertiary border border-dark-border rounded px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-neon-green w-32"
+      />
+    </form>
 
-        <.link patch={~p"/notes/new"}>
-          <button class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:scale-105">
-            <.icon name="hero-plus-mini" class="w-4 h-4" /> New Note
-          </button>
-        </.link>
+    <!-- View Mode Toggle -->
+    <div class="flex bg-dark-tertiary rounded-lg p-1">
+      <button
+        phx-click="toggle_view"
+        phx-value-mode="list"
+        class={[
+          "px-3 py-1 rounded text-sm transition-all",
+          (@view_mode == :list && "bg-neon-green text-dark-primary") ||
+            "text-text-secondary hover:text-text-primary"
+        ]}
+      >
+        List
+      </button>
+      <button
+        phx-click="toggle_view"
+        phx-value-mode="graph"
+        class={[
+          "px-3 py-1 rounded text-sm transition-all",
+          (@view_mode == :graph && "bg-neon-green text-dark-primary") ||
+            "text-text-secondary hover:text-text-primary"
+        ]}
+      >
+        Graph
+      </button>
+    </div>
+
+    <.link patch={~p"/notes/new"} class="ml-auto">
+      <button class="btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:scale-105">
+        <.icon name="hero-plus-mini" class="w-4 h-4" /> New Note
+      </button>
+    </.link>
+  </div>
+
+  <!-- List view -->
+  <div :if={@view_mode == :list} class="flex-1 min-h-0 overflow-y-auto">
+    <div class="mx-auto max-w-4xl px-4 py-8">
+      <div :if={@notes_empty_message} class="text-center py-16 text-text-muted">
+        <p class="text-sm">{@notes_empty_message}</p>
       </div>
-    </:actions>
-  </.header>
 
-  <div class="space-y-4">
+      <div id="notes" phx-update="stream" phx-hook="NoteCountUpdater" class="space-y-4">
+        <div :for={{dom_id, note} <- @streams.notes} id={dom_id} class="note-card">
+          <div class="space-y-3">
+            <div class="flex items-start justify-between">
+              <div class="flex-1 space-y-2">
+                <div class="flex items-center gap-3">
+                  <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
+                    Author
+                  </span>
+                  <code id={"pubkey-#{note.id}"} class="pubkey text-xs bg-dark-tertiary px-2 py-1 rounded">
+                    <%= if note.author do %>
+                      {note.author}
+                    <% else %>
+                      {String.slice(note.pubkey, 0, 12)}...
+                    <% end %>
+                  </code>
+                  <span class="hidden" id={"pubkey-full-#{note.id}"}>{note.pubkey}</span>
+                  <button
+                    id={"copy-pubkey-#{note.id}"}
+                    phx-hook="Copy"
+                    data-to={"#pubkey-full-#{note.id}"}
+                    class="text-xs text-text-muted border-none p-2 hover:text-neon-green transition-colors cursor-pointer"
+                    title="Copy pubkey"
+                  >
+                    <.icon name="hero-document-duplicate-mini"/>
+                  </button>
+                </div>
+                <div class="flex items-center gap-3">
+                  <%= if note.bot do %>
+                    <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
+                      bot account 🤖
+                    </span>
+                  <% end %>
+                </div>
+              </div>
+              <div class="text-xs text-text-muted font-mono">
+                <%= if note.created_at do %>
+                  {note.created_at}
+                <% else %>
+                  Just now
+                <% end %>
+              </div>
+            </div>
+
+            <div class="note-content bg-dark-tertiary rounded-lg p-2 border border-dark-border">
+              <p class="text-text-primary leading-2 p-2">{note.content}</p>
+            </div>
+
+            <!-- Interaction Stats -->
+            <div class="flex items-center gap-4 text-xs text-text-muted interaction-stats">
+              <%= if Map.get(note, :reaction_count, 0) > 0 do %>
+                <div class="flex items-center gap-1">
+                  <span>❤️</span>
+                  <span>{Map.get(note, :reaction_count, 0)}</span>
+                </div>
+              <% end %>
+              <%= if Map.get(note, :boost_count, 0) > 0 do %>
+                <div class="flex items-center gap-1">
+                  <span>🔄</span>
+                  <span>{Map.get(note, :boost_count, 0)}</span>
+                </div>
+              <% end %>
+              <%= if Map.get(note, :zap_amount, 0) > 0 do %>
+                <div class="flex items-center gap-1">
+                  <span class="text-yellow-400">⚡</span>
+                  <span class="text-yellow-400">{Map.get(note, :zap_amount, 0)} sats</span>
+                </div>
+              <% end %>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-text-muted uppercase tracking-wider">
+                event ID
+              </span>
+              <code id={"note-id-#{note.id}"} class="note-id text-xs bg-dark-tertiary px-2 py-1 rounded">
+                {String.slice(note.id, 0, 12)}...
+              </code>
+              <span class="hidden" id={"note-full-id-#{note.id}"}>{note.id}</span>
+              <button
+                id={"copy-note-id-#{note.id}"}
+                phx-hook="Copy"
+                data-to={"#note-full-id-#{note.id}"}
+                class="text-xs text-text-muted border-none p-2 hover:text-neon-green transition-colors cursor-pointer"
+                title="Copy event ID"
+              >
+                <.icon name="hero-document-duplicate-mini"/>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Graph view: fills the remaining viewport; the rightmost column shows
+      the hovered note's full content (client-side, no server roundtrip). -->
+  <div :if={@view_mode == :graph} class="flex-1 min-h-0 flex">
     <%!-- phx-update="ignore": the graph's DOM is owned by d3. Without this,
         any server re-render would patch this (server-side empty) container
         and wipe the client-created SVG. All updates flow via push_event. --%>
     <div
-      :if={@view_mode == :graph}
       id="graph-container"
-      class="bg-dark-secondary border border-dark-border rounded-lg min-h-[800px] overflow-auto"
+      class="flex-1 min-w-0"
       phx-hook="NetworkGraph"
       phx-update="ignore"
     >
     </div>
 
-    <div :if={@notes_empty_message && @view_mode == :list} class="text-center py-16 text-text-muted">
-      <p class="text-sm">{@notes_empty_message}</p>
-    </div>
-
-    <div :if={@view_mode == :list} id="notes" phx-update="stream" phx-hook="NoteCountUpdater" class="space-y-4">
-      <div :for={{dom_id, note} <- @streams.notes} id={dom_id} class="note-card">
-        <div class="space-y-3">
-          <div class="flex items-start justify-between">
-            <div class="flex-1 space-y-2">
-              <div class="flex items-center gap-3">
-                <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
-                  Author
-                </span>
-                <code id={"pubkey-#{note.id}"} class="pubkey text-xs bg-dark-tertiary px-2 py-1 rounded">
-                  <%= if note.author do %>
-                    {note.author}
-                  <% else %>
-                    {String.slice(note.pubkey, 0, 12)}...
-                  <% end %>
-                </code>
-                <span class="hidden" id={"pubkey-full-#{note.id}"}>{note.pubkey}</span>
-                <button
-                  id={"copy-pubkey-#{note.id}"}
-                  phx-hook="Copy"
-                  data-to={"#pubkey-full-#{note.id}"}
-                  class="text-xs text-text-muted border-none p-2 hover:text-neon-green transition-colors cursor-pointer"
-                  title="Copy pubkey"
-                >
-                  <.icon name="hero-document-duplicate-mini"/>
-                </button>
-              </div>
-              <div class="flex items-center gap-3">
-                <%= if note.bot do %>
-                  <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
-                    bot account 🤖
-                  </span>
-                <% end %>
-              </div>
-            </div>
-            <div class="text-xs text-text-muted font-mono">
-              <%= if note.created_at do %>
-                {note.created_at}
-              <% else %>
-                Just now
-              <% end %>
-            </div>
+    <aside class="w-1/5 min-w-[240px] border-l border-dark-border bg-dark-secondary overflow-y-auto">
+      <div class="p-4">
+        <p id="graph-sidebar-placeholder" class="text-sm text-text-muted">
+          Hover a node to read the note.
+        </p>
+        <div id="graph-sidebar-content" class="hidden space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <span id="graph-sidebar-author" class="text-xs font-medium text-neon-green uppercase tracking-wider truncate"></span>
+            <span id="graph-sidebar-time" class="text-xs text-text-muted font-mono whitespace-nowrap"></span>
           </div>
-
-          <div class="note-content bg-dark-tertiary rounded-lg p-2 border border-dark-border">
-            <p class="text-text-primary leading-2 p-2">{note.content}</p>
+          <div class="bg-dark-tertiary rounded-lg p-3 border border-dark-border">
+            <p id="graph-sidebar-body" class="text-text-primary text-sm leading-relaxed whitespace-pre-wrap break-words"></p>
           </div>
-          
-          <!-- Interaction Stats -->
-          <div class="flex items-center gap-4 text-xs text-text-muted interaction-stats">
-            <%= if Map.get(note, :reaction_count, 0) > 0 do %>
-              <div class="flex items-center gap-1">
-                <span>❤️</span>
-                <span>{Map.get(note, :reaction_count, 0)}</span>
-              </div>
-            <% end %>
-            <%= if Map.get(note, :boost_count, 0) > 0 do %>
-              <div class="flex items-center gap-1">
-                <span>🔄</span>
-                <span>{Map.get(note, :boost_count, 0)}</span>
-              </div>
-            <% end %>
-            <%= if Map.get(note, :zap_amount, 0) > 0 do %>
-              <div class="flex items-center gap-1">
-                <span class="text-yellow-400">⚡</span>
-                <span class="text-yellow-400">{Map.get(note, :zap_amount, 0)} sats</span>
-              </div>
-            <% end %>
-          </div>
-          
-          <div class="flex items-center gap-3">
-            <span class="text-xs text-text-muted uppercase tracking-wider">
-              event ID
-            </span>
-            <code id={"note-id-#{note.id}"} class="note-id text-xs bg-dark-tertiary px-2 py-1 rounded">
-              {String.slice(note.id, 0, 12)}...
-            </code>
-            <span class="hidden" id={"note-full-id-#{note.id}"}>{note.id}</span>
-            <button
-              id={"copy-note-id-#{note.id}"}
-              phx-hook="Copy"
-              data-to={"#note-full-id-#{note.id}"}
-              class="text-xs text-text-muted border-none p-2 hover:text-neon-green transition-colors cursor-pointer"
-              title="Copy event ID"
-            >
-              <.icon name="hero-document-duplicate-mini"/>
-            </button>
-          </div>
+          <div id="graph-sidebar-stats" class="flex items-center gap-4 text-xs text-text-muted"></div>
+          <code id="graph-sidebar-id" class="block text-xs text-text-muted"></code>
         </div>
       </div>
-    </div>
+    </aside>
   </div>
 </div>
 

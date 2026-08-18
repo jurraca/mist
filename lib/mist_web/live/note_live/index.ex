@@ -144,7 +144,7 @@ defmodule MistWeb.NoteLive.Index do
 
   @impl true
   def handle_event("request_graph", _params, socket) do
-    {:noreply, push_event(socket, "graph_reset", Map.take(socket.assigns.graph_data, [:nodes, :links]))}
+    {:noreply, push_event(socket, "graph_reset", graph_payload(socket))}
   end
 
   @impl true
@@ -286,8 +286,15 @@ defmodule MistWeb.NoteLive.Index do
     socket
     |> stream(:notes, notes)
     |> assign(:graph_data, graph)
-    |> push_event("graph_reset", Map.take(graph, [:nodes, :links]))
+    |> push_event("graph_reset", graph_payload(socket, graph))
     |> assign(:notes_empty_message, empty_state_message(socket.assigns, notes))
+  end
+
+  # window_seconds lets the client map conversation age onto the time axis.
+  defp graph_payload(socket, graph \\ nil) do
+    (graph || socket.assigns.graph_data)
+    |> Map.take([:nodes, :links])
+    |> Map.put(:window_seconds, socket.assigns.lookback_seconds)
   end
 
   defp empty_state_message(_assigns, notes) when notes != [], do: nil
@@ -344,8 +351,11 @@ defmodule MistWeb.NoteLive.Index do
         {:ok, %{filters: [kinds: [1]]}}
 
       :following ->
+        # since bounds relay backfill to the view's lookback window;
+        # SubManager's feed subs handle longer-term continuity.
         pubkeys = assigns.follow_pubkeys
-        if pubkeys == [], do: :skip, else: {:ok, %{filters: [kinds: [1], authors: pubkeys]}}
+        since = lookback_since(assigns.lookback_seconds)
+        if pubkeys == [], do: :skip, else: {:ok, %{filters: [kinds: [1], authors: pubkeys, since: since]}}
 
       :single_relay ->
         relay = assigns.selected_relay
@@ -372,7 +382,7 @@ defmodule MistWeb.NoteLive.Index do
         if pubkeys == [] do
           :skip
         else
-          {:ok, %{filters: [kinds: [1], authors: pubkeys]}}
+          {:ok, %{filters: [kinds: [1], authors: pubkeys, since: lookback_since(assigns.lookback_seconds)]}}
         end
 
       {:subscription, sub_id} ->
@@ -447,11 +457,13 @@ defmodule MistWeb.NoteLive.Index do
     push_event(socket, "update_note_counts", %{note_id: note_id, counts: counts})
   end
 
-  # The graph only shows conversations from the current network source:
-  # drop live notes from outside the source pubkey set entirely, and let
-  # GraphUpdater hold anything that doesn't (yet) join a conversation.
+  # The graph only shows conversations from the current network source and
+  # inside the lookback window: drop live notes from outside the source
+  # pubkey set or older than the window (relay backfill delivers far more
+  # history than the view covers), and let GraphUpdater hold anything that
+  # doesn't (yet) join a conversation.
   defp maybe_queue_graph_update(socket, note) do
-    if in_scope?(socket.assigns, note.pubkey) do
+    if in_scope?(socket.assigns, note.pubkey) and in_window?(socket.assigns, note) do
       socket
       |> queue_reply_parents(note)
       |> queue_graph_update(note)
@@ -459,6 +471,12 @@ defmodule MistWeb.NoteLive.Index do
       socket
     end
   end
+
+  defp in_window?(%{lookback_seconds: lookback}, %{created_at: ts}) when is_integer(ts) do
+    ts >= System.os_time(:second) - lookback
+  end
+
+  defp in_window?(_, _), do: true
 
   defp in_scope?(%{source_pubkeys: nil}, _pubkey), do: true
   defp in_scope?(%{source_pubkeys: set}, pubkey), do: MapSet.member?(set, pubkey)

@@ -20,7 +20,7 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
 
   describe "new/0" do
     test "returns empty graph" do
-      assert GraphUpdater.new() == %{nodes: [], links: [], held: %{}}
+      assert GraphUpdater.new() == %{nodes: [], links: [], held: %{}, ids: MapSet.new(), link_keys: MapSet.new()}
     end
   end
 
@@ -55,7 +55,7 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
     end
 
     test "returns empty graph for empty list" do
-      assert GraphUpdater.from_notes([]) == %{nodes: [], links: [], held: %{}}
+      assert GraphUpdater.from_notes([]) == %{nodes: [], links: [], held: %{}, ids: MapSet.new(), link_keys: MapSet.new()}
     end
   end
 
@@ -214,17 +214,17 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
   end
 
   describe "build_node/1" do
-    test "truncates content to 50 chars with ellipsis" do
-      long = String.duplicate("a", 60)
+    test "keeps full content untruncated" do
+      long = String.duplicate("a", 200)
       note = make_note("n1", long)
       node = GraphUpdater.build_node(note)
-      assert node.content == String.duplicate("a", 50) <> "..."
+      assert node.content == long
     end
 
-    test "short content still gets ellipsis appended" do
-      note = make_note("n1", "hi")
+    test "nil content becomes empty string" do
+      note = make_note("n1") |> Map.put(:content, nil)
       node = GraphUpdater.build_node(note)
-      assert node.content == "hi..."
+      assert node.content == ""
     end
 
     test "includes default counts" do

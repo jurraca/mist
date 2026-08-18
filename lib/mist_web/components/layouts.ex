@@ -11,4 +11,67 @@ defmodule MistWeb.Layouts do
   use MistWeb, :html
 
   embed_templates "layouts/*"
+
+  @doc """
+  Renders the top navigation header shared by all layouts.
+  """
+  def app_header(assigns) do
+    ~H"""
+    <header class="px-4 sm:px-6 lg:px-8 bg-dark-secondary border-b border-dark-border">
+      <div class="flex items-center justify-between py-4 text-sm">
+        <div class="flex items-center gap-6">
+          <a href="/" class="flex items-center gap-2 group">
+            <div class="w-8 h-8 bg-gradient-to-br from-neon-green to-neon-purple rounded-lg flex items-center justify-center font-bold text-dark-primary">
+              M
+            </div>
+            <span class="text-xl font-bold text-neon-green group-hover:text-neon-purple transition-colors">MIST</span>
+          </a>
+          <nav class="flex items-center gap-4">
+            <.link navigate={~p"/notes"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
+              Home
+            </.link>
+            <.link navigate={~p"/profiles"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
+              Profiles
+            </.link>
+            <.link navigate={~p"/subscriptions"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
+              Lists
+            </.link>
+            <.link navigate={~p"/relays"} class="nav-link text-text-secondary hover:text-neon-green transition-colors px-3 py-2 rounded">
+              Relays
+            </.link>
+          </nav>
+        </div>
+        <div class="flex items-center gap-4">
+          <a href="https://github.com/nostr-protocol/nostr"
+    class="text-text-secondary hover:text-neon-green transition-colors">
+            Nostr Protocol
+          </a>
+          <!-- Dropdown Menu -->
+          <div class="relative">
+            <button
+              id="gear-menu-button"
+              phx-click={JS.toggle(to: "#gear-dropdown") |> JS.add_class("hidden", to: "#gear-dropdown", transition: "")}
+              class="p-2 text-text-secondary hover:text-neon-green transition-colors">
+              <.icon name="hero-cog-6-tooth" class="w-5 h-5" />
+            </button>
+            <div
+              id="gear-dropdown"
+              class="hidden absolute right-0 mt-2 w-48 bg-dark-secondary border border-dark-border rounded-lg shadow-lg py-1 z-50"
+              phx-click-away={JS.hide(to: "#gear-dropdown")}>
+              <.link navigate={~p"/profile/manage"} class="block px-4 py-2 text-sm text-text-primary hover:bg-dark-tertiary transition-colors">
+                My Profile
+              </.link>
+              <.link navigate={~p"/welcome"} class="block px-4 py-2 text-sm text-text-primary hover:bg-dark-tertiary transition-colors">
+                Switch Identity
+              </.link>
+              <div class="block px-4 py-2 text-sm text-text-muted cursor-not-allowed">
+                Settings
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+    """
+  end
 end
