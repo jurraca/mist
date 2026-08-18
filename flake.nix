@@ -2,7 +2,7 @@
   description = "A flake template for Phoenix 1.7 projects.";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   };
 
   outputs = {
@@ -10,9 +10,9 @@
     nixpkgs,
   }: let
     overlay = prev: final: rec {
-      erlang = prev.beam.interpreters.erlang_27;
+      erlang = prev.beam.interpreters.erlang_29;
       beamPackages = prev.beam.packagesWith erlang;
-      elixir = beamPackages.elixir_1_18;
+      elixir = beamPackages.elixir_1_20;
       hex = beamPackages.hex;
     };
 

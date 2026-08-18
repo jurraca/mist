@@ -32,7 +32,7 @@ defmodule Mist.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:phoenix, "~> 1.7.21"},
+      {:phoenix, "~> 1.8.11"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.10"},
       {:ecto_sqlite3, "~> 0.12"},
@@ -40,6 +40,7 @@ defmodule Mist.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.0"},
       {:floki, ">= 0.30.0", only: :test},
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
@@ -57,7 +58,8 @@ defmodule Mist.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
       {:tidewave, "~> 0.1", only: :dev},
-      {:nostr_ex, github: "jurraca/nostr_ex"}
+      {:nostr_ex, path: "/home/base/code/nostr-elixir/nostr_ex"},
+      {:nostr_core, path: "/home/base/code/nostr-elixir/nostr_core"}
     ]
   end
 
@@ -73,7 +75,11 @@ defmodule Mist.MixProject do
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      "assets.setup": [
+        "tailwind.install --if-missing",
+        "esbuild.install --if-missing",
+        "cmd --cd assets npm install --if-missing"
+      ],
       "assets.build": ["tailwind mist", "esbuild mist"],
       "assets.deploy": [
         "tailwind mist --minify",

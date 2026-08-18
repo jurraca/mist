@@ -8,8 +8,8 @@
   basePackages = with pkgs; [
     elixir
     hex
-    postgresql
-    nodejs_20
+    sqlite
+    nodejs
     esbuild
     tailwindcss
     autoreconfHook
@@ -35,15 +35,6 @@
     export LANG=en_US.UTF-8
     # keep your shell history in iex
     export ERL_AFLAGS="-kernel shell_history enabled"
-
-    # postgres related
-    # keep all your db data in a folder inside the project
-    export PGDATA="$PWD/db"
-
-    # phoenix related env vars
-    export POOL_SIZE=15
-    export DB_URL="postgresql://postgres:postgres@localhost:5432/${dbName}"
-    export PORT=4000
   '';
 in
   pkgs.mkShell {
