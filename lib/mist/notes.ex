@@ -21,10 +21,19 @@ defmodule Mist.Notes do
 
         true ->
           case NostrEx.send_event(signed) do
-            {:error, reason} -> {:ok, signed, {:error, reason}}
-            _ ->
-             EventHandler.process_event(signed)
-             {:ok, signed}
+            {:ok, _event_id, []} ->
+              EventHandler.process_event(signed)
+              {:ok, signed}
+
+            {:ok, _event_id, failures} ->
+              EventHandler.process_event(signed)
+              {:ok, signed, {:relay_error, failures}}
+
+            {:error, reason} ->
+              {:ok, signed, {:error, reason}}
+
+            {:error, _msg, failures} ->
+              {:ok, signed, {:error, failures}}
           end
       end
     else

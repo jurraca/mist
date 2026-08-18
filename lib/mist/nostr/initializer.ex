@@ -83,12 +83,13 @@ defmodule Mist.Nostr.Initializer do
     Logger.info("Initializer: connecting to bootstrap relay #{relay_url}")
 
     case Relay.maybe_connect_relays([relay_url]) do
-      {:ok, _} ->
-        fetch_own_events(pubkey, relay_url)
-        maybe_persist_relay_hint(pubkey, relay_hint)
-
-      {:error, reason} ->
-        Logger.warning("Initializer: failed to connect to bootstrap relay: #{inspect(reason)}")
+      {:ok, connected} ->
+        if relay_url in connected do
+          fetch_own_events(pubkey, relay_url)
+          maybe_persist_relay_hint(pubkey, relay_hint)
+        else
+          Logger.warning("Initializer: failed to connect to bootstrap relay #{relay_url}")
+        end
     end
   end
 
@@ -114,6 +115,7 @@ defmodule Mist.Nostr.Initializer do
     filter = [authors: [pubkey], kinds: @bootstrap_kinds]
 
     with {:ok, sub} <- NostrEx.create_sub(filter),
+         :ok <- NostrEx.listen(sub),
          {:ok, sub_id} <- NostrEx.send_sub(sub, send_via: [relay_url]) do
       Logger.info("Initializer: subscribed to #{relay_url} (sub_id: #{sub_id})")
       event_count = receive_events_loop(sub_id, relay_url)
