@@ -58,9 +58,8 @@ defmodule Mist.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
-      {:tidewave, "~> 0.1", only: :dev},
-      {:nostr_ex, path: "/home/base/code/nostr-elixir/nostr_ex"},
-      {:nostr_core, path: "/home/base/code/nostr-elixir/nostr_core"}
+      {:nostr_ex, github: "jurraca/nostr_ex"},
+      {:nostr_core, github: "jurraca/nostr_core"}
     ]
   end
 
