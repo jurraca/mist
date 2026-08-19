@@ -1,7 +1,6 @@
 {
   pkgs,
   dbName,
-  mixEnv,
   beamPackages,
 }: let
   # define packages to install
@@ -30,7 +29,10 @@
     export HEX_HOME=$PWD/.nix-mix
     export PATH=$MIX_HOME/bin:$HEX_HOME/bin:$PATH
 
-    export MIX_ENV=${mixEnv}
+    # NOTE: MIX_ENV is deliberately NOT set here. Forcing it (e.g. to "dev")
+    # overrides `mix test`'s preferred :test env, which breaks the test run
+    # (no Ecto sandbox pool, test/support not on the compile path). Mix
+    # defaults to dev on its own, so nothing needs exporting.
 
     export LANG=en_US.UTF-8
     # keep your shell history in iex

@@ -66,18 +66,11 @@
       pkgs = nixpkgsFor system;
     in {
       default = self.devShells.${system}.dev;
+      # Single shell: no MIX_ENV override (see shell.nix), so `mix test`
+      # runs in :test and everything else defaults to :dev.
       dev = pkgs.callPackage ./shell.nix {
         dbName = "db_dev";
-        mixEnv = "dev";
       };
-#      test = pkgs.callPackage ./shell.nix {
-#        dbName = "db_test";
-#        mixEnv = "test";
-#      };
-#      prod = pkgs.callPackage ./shell.nix {
-#        dbName = "db_prod";
-#        mixEnv = "prod";
-#      };
     });
   };
 }
