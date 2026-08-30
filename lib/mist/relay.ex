@@ -13,6 +13,17 @@ defmodule Mist.Relay do
 
   @connect_timeout 5_000
 
+  # Socket-level reconnect policy: a dead relay gets 5 consecutive
+  # attempts with 1s..60s jittered backoff (~2-3 minutes of trying) before
+  # the socket gives up and unregisters itself. NostrEx's default is
+  # :infinity, which hammers dead relays forever.
+  @connect_opts [max_attempts: 5, backoff_min: 1_000, backoff_max: 60_000]
+
+  @doc """
+  Options passed to every `NostrEx.connect/2` call made by the app.
+  """
+  def connect_opts, do: @connect_opts
+
   @doc """
   Returns the list of relays with preloaded metadata.
 
@@ -29,57 +40,71 @@ defmodule Mist.Relay do
   @doc """
   Ensure the given relay URLs are connected, connecting those that are not.
 
-  Connections are attempted concurrently. Returns `{:ok, connected_urls}` —
-  the subset of the input that is actually connected afterwards (previously
-  connected plus newly connected). Failures are logged and simply absent
-  from the result.
+  Connections are attempted concurrently. Returns `{:ok, connected_urls,
+  failed_urls}` — `connected_urls` is the subset of the input that is
+  connected afterwards (previously connected plus newly connected);
+  `failed_urls` is the subset that failed to connect this call (so the
+  caller can back off/blacklist them). Failures are also logged.
   """
   def maybe_connect_relays(relay_list) do
     {connected, not_connected} = connected(relay_list)
-    {:ok, connected ++ connect_relays(not_connected)}
+    {newly_connected, newly_failed} = connect_relays(not_connected)
+    {:ok, connected ++ newly_connected, newly_failed}
   end
 
   @doc """
   Connect to the given relay URLs concurrently.
 
-  Returns the list of URLs that connected successfully.
-
-  Tasks are started with `Task.Supervisor.async_nolink/2`: a raising or
-  hanging connect (e.g. a GenServer.call timeout inside NostrEx) must never
-  propagate an exit into the calling GenServer (SubManager).
+  Returns `{connected_urls, failed_urls}`. Tasks are started with
+  `Task.Supervisor.async_nolink/2`: a raising or hanging connect (e.g. a
+  GenServer.call timeout inside NostrEx) must never propagate an exit into
+  the calling GenServer (SubManager).
   """
   def connect_relays(relay_list) when is_list(relay_list) do
     tasks =
       Enum.map(relay_list, fn url ->
-        {url, Task.Supervisor.async_nolink(Mist.TaskSupervisor, fn -> NostrEx.connect(url) end)}
+        {url, Task.Supervisor.async_nolink(Mist.TaskSupervisor, fn ->
+          # NostrEx.connect/1 does an internal GenServer.call that can exit
+          # on connection refused / TLS failure. Catch it so the Task
+          # terminates normally (no OTP error log) and yield_many sees a
+          # clean {:ok, {:error, _}} instead of {:exit, _}.
+          try do
+            NostrEx.connect(url, connect_opts())
+          catch
+            :exit, reason -> {:error, {:exit, reason}}
+          end
+        end)}
       end)
 
     url_by_ref = Map.new(tasks, fn {url, task} -> {task.ref, url} end)
 
-    tasks
-    |> Enum.map(fn {_url, task} -> task end)
-    |> Task.yield_many(timeout: @connect_timeout)
-    |> Enum.flat_map(fn {task, result} ->
-      url = Map.fetch!(url_by_ref, task.ref)
+    {connected, failed} =
+      tasks
+      |> Enum.map(fn {_url, task} -> task end)
+      |> Task.yield_many(timeout: @connect_timeout)
+      |> Enum.reduce({[], []}, fn {task, result}, {conn, fail} ->
+        url = Map.fetch!(url_by_ref, task.ref)
 
-      case result do
-        {:ok, {:ok, _name}} ->
-          [url]
+        case result do
+          {:ok, {:ok, _name}} ->
+            {[url | conn], fail}
 
-        {:ok, {:error, reason}} ->
-          Logger.warning("Relay.connect: could not connect to #{url}: #{inspect(reason)}")
-          []
+          {:ok, {:error, reason}} ->
+            Logger.warning("Relay.connect: could not connect to #{url}: #{inspect(reason)}")
+            {conn, [url | fail]}
 
-        {:exit, reason} ->
-          Logger.warning("Relay.connect: connect to #{url} crashed: #{inspect(reason)}")
-          []
+          {:exit, reason} ->
+            Logger.warning("Relay.connect: connect to #{url} crashed: #{inspect(reason)}")
+            {conn, [url | fail]}
 
-        nil ->
-          Task.shutdown(task, :brutal_kill)
-          Logger.warning("Relay.connect: connect to #{url} timed out")
-          []
-      end
-    end)
+          nil ->
+            Task.shutdown(task, :brutal_kill)
+            Logger.warning("Relay.connect: connect to #{url} timed out")
+            {conn, [url | fail]}
+        end
+      end)
+
+    {Enum.reverse(connected), Enum.reverse(failed)}
   end
 
   def connected(relay_list) do

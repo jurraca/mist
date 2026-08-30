@@ -93,7 +93,7 @@ defmodule MistWeb.RelayLive.Index do
 
   @impl true
   def handle_event("connect", %{"url" => url}, socket) do
-    case NostrEx.connect(url) do
+    case NostrEx.connect(url, Relay.connect_opts()) do
       {:ok, _pid} ->
         {:noreply,
          socket

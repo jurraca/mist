@@ -213,6 +213,37 @@ defmodule MistWeb.NoteLive.GraphUpdaterTest do
     end
   end
 
+  describe "update_profile/3" do
+    test "updates author and picture on all nodes by the pubkey" do
+      n1 = make_note("n1") |> Map.put(:pubkey, "pk1")
+      n2 = make_note("n2") |> Map.put(:pubkey, "pk1")
+      n3 = make_note("n3") |> Map.put(:pubkey, "pk3")
+      graph = GraphUpdater.from_notes([n1, n2, n3])
+
+      updated = GraphUpdater.update_profile(graph, "pk1", %{author: "alice", picture: "https://img"})
+
+      for id <- ["n1", "n2"] do
+        node = Enum.find(updated.nodes, &(&1.id == id))
+        assert node.author == "alice"
+        assert node.picture == "https://img"
+      end
+
+      assert Enum.find(updated.nodes, &(&1.id == "n3")).author == nil
+    end
+
+    test "nil values do not clobber existing data" do
+      n1 = make_note("n1")
+      graph = GraphUpdater.from_notes([n1])
+      graph = GraphUpdater.update_profile(graph, "pk_n1", %{author: "alice", picture: "https://img"})
+
+      updated = GraphUpdater.update_profile(graph, "pk_n1", %{author: nil, picture: nil})
+
+      node = Enum.find(updated.nodes, &(&1.id == "n1"))
+      assert node.author == "alice"
+      assert node.picture == "https://img"
+    end
+  end
+
   describe "build_node/1" do
     test "keeps full content untruncated" do
       long = String.duplicate("a", 200)

@@ -158,6 +158,31 @@ defmodule Mist.NotesTest do
 
       assert %{author: "alice", bot: false} = Notes.note_view(note)
     end
+
+    test "reply_to extracts the parent from a plain e tag" do
+      reply = reply_fixture("parent-id")
+      assert Notes.note_view(reply).reply_to == "parent-id"
+    end
+
+    test "reply_to prefers the NIP-10 reply marker over root" do
+      note = event_fixture()
+
+      {:ok, _} =
+        Repo.insert(Tags.changeset(%Tags{}, %{event_id: note.id, key: "e", value: "root-id", rest: ["root"]}))
+
+      {:ok, _} =
+        Repo.insert(Tags.changeset(%Tags{}, %{event_id: note.id, key: "e", value: "reply-id", rest: ["reply"]}))
+
+      assert Notes.note_view(Repo.preload(note, :tags)).reply_to == "reply-id"
+    end
+
+    test "reply_to is nil for mentions and top-level notes" do
+      mention = reply_fixture("mentioned-id", mention: true)
+      assert Notes.note_view(mention).reply_to == nil
+
+      top = event_fixture()
+      assert Notes.note_view(top).reply_to == nil
+    end
   end
 
   describe "list_conversations/3" do
@@ -250,6 +275,108 @@ defmodule Mist.NotesTest do
 
       assert [first, _second] = views
       assert first.created_at >= List.last(views).created_at
+    end
+
+    test "secondary reply to a network note is included" do
+      follow = profile_fixture()
+      second_hopper = profile_fixture()
+      network_note = event_fixture(%{pubkey: follow.pubkey, content: "network note"})
+      _secondary_reply = reply_fixture(network_note.event_id, pubkey: second_hopper.pubkey)
+
+      since = System.os_time(:second) - 3600
+
+      views = Notes.list_conversations([follow.pubkey], since, secondary_pubkeys: [second_hopper.pubkey])
+
+      ids = Enum.map(views, & &1.id)
+      assert network_note.event_id in ids
+      assert _secondary_reply.event_id in ids
+    end
+
+    test "network reply to a secondary parent is included" do
+      follow = profile_fixture()
+      second_hopper = profile_fixture()
+      secondary_parent = event_fixture(%{pubkey: second_hopper.pubkey, content: "secondary parent"})
+      _network_reply = reply_fixture(secondary_parent.event_id, pubkey: follow.pubkey)
+
+      since = System.os_time(:second) - 3600
+
+      views = Notes.list_conversations([follow.pubkey], since, secondary_pubkeys: [second_hopper.pubkey])
+
+      ids = Enum.map(views, & &1.id)
+      assert secondary_parent.event_id in ids
+      assert _network_reply.event_id in ids
+    end
+
+    test "standalone secondary notes are excluded" do
+      follow = profile_fixture()
+      second_hopper = profile_fixture()
+      # Secondary note nobody in the network interacts with...
+      _lonely_secondary = event_fixture(%{pubkey: second_hopper.pubkey})
+      # ...and a network conversation so the query has something to anchor to.
+      parent = event_fixture(%{pubkey: follow.pubkey})
+      _reply = reply_fixture(parent.event_id, pubkey: follow.pubkey)
+
+      since = System.os_time(:second) - 3600
+
+      views = Notes.list_conversations([follow.pubkey], since, secondary_pubkeys: [second_hopper.pubkey])
+
+      ids = Enum.map(views, & &1.id)
+      refute _lonely_secondary.event_id in ids
+      assert parent.event_id in ids
+    end
+
+    test "secondary-to-secondary replies without a network note are excluded" do
+      follow = profile_fixture()
+      second_a = profile_fixture()
+      second_b = profile_fixture()
+
+      secondary_root = event_fixture(%{pubkey: second_a.pubkey})
+      _secondary_chain = reply_fixture(secondary_root.event_id, pubkey: second_b.pubkey)
+
+      # Network conversation exists but is unrelated to the secondary thread.
+      parent = event_fixture(%{pubkey: follow.pubkey})
+      _reply = reply_fixture(parent.event_id, pubkey: follow.pubkey)
+
+      since = System.os_time(:second) - 3600
+
+      views =
+        Notes.list_conversations([follow.pubkey], since,
+          secondary_pubkeys: [second_a.pubkey, second_b.pubkey]
+        )
+
+      ids = Enum.map(views, & &1.id)
+      refute secondary_root.event_id in ids
+      refute _secondary_chain.event_id in ids
+    end
+
+    test "secondary notes are excluded when no secondary_pubkeys opt is given" do
+      follow = profile_fixture()
+      second_hopper = profile_fixture()
+      network_note = event_fixture(%{pubkey: follow.pubkey})
+      _secondary_reply = reply_fixture(network_note.event_id, pubkey: second_hopper.pubkey)
+
+      since = System.os_time(:second) - 3600
+
+      views = Notes.list_conversations([follow.pubkey], since)
+
+      # The network note's only reply is secondary; without the opt the
+      # reply is a stranger and the note drops out entirely.
+      assert views == []
+    end
+
+    test "stranger-authored parents stay excluded even with secondary pubkeys" do
+      follow = profile_fixture()
+      second_hopper = profile_fixture()
+      rando = profile_fixture()
+      rando_parent = event_fixture(%{pubkey: rando.pubkey})
+      _reply = reply_fixture(rando_parent.event_id, pubkey: follow.pubkey)
+
+      since = System.os_time(:second) - 3600
+
+      views =
+        Notes.list_conversations([follow.pubkey], since, secondary_pubkeys: [second_hopper.pubkey])
+
+      assert views == []
     end
   end
 

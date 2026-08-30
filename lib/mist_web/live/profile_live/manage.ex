@@ -110,6 +110,8 @@ defmodule MistWeb.ProfileLive.Manage do
          |> assign(profile: profile)
          |> put_flash(:info, "Profile updated")}
       else
+        {:error, reason, _failures} ->
+          {:noreply, put_flash(socket, :error, "Failed to update profile: #{inspect(reason)}")}
         {:error, reason} ->
           {:noreply, put_flash(socket, :error, "Failed to update profile: #{inspect(reason)}")}
       end

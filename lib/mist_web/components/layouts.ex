@@ -44,7 +44,7 @@ defmodule MistWeb.Layouts do
         <div class="flex items-center gap-4">
           <a href="https://github.com/nostr-protocol/nostr"
     class="text-text-secondary hover:text-neon-green transition-colors">
-            Nostr Protocol
+            Settings
           </a>
           <!-- Dropdown Menu -->
           <div class="relative">

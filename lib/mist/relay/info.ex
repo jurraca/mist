@@ -5,6 +5,9 @@ defmodule Mist.Relay.Info do
   schema "relays" do
     field :name, :string
     field :url, :string
+    field :failure_count, :integer, default: 0
+    field :blacklisted_at, :utc_datetime
+    field :blacklist_reason, :string
 
     has_one :metadata, Mist.Relay.Metadata, foreign_key: :relay_id
 
@@ -26,7 +29,7 @@ defmodule Mist.Relay.Info do
       end
 
     relay
-    |> cast(attrs, [:name, :url])
+    |> cast(attrs, [:name, :url, :failure_count, :blacklisted_at, :blacklist_reason])
     |> validate_required([:url])
     |> unique_constraint([:url])
   end

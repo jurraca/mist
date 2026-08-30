@@ -136,4 +136,16 @@ defmodule Mist.RelayTest do
       assert is_nil(Relay.get_relay_if_fresh("wss://no-meta.example.com"))
     end
   end
+
+  describe "connect_opts/0" do
+    test "bounds the socket reconnect loop instead of retrying forever" do
+      opts = Relay.connect_opts()
+
+      assert Keyword.get(opts, :max_attempts) == 5
+      # Backoff bounds are sane: at least a second, at most a minute.
+      assert Keyword.get(opts, :backoff_min) >= 1_000
+      assert Keyword.get(opts, :backoff_max) <= 60_000
+      assert Keyword.get(opts, :backoff_min) < Keyword.get(opts, :backoff_max)
+    end
+  end
 end

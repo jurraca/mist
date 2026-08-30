@@ -21,8 +21,14 @@ defmodule Mist.Application do
           [
             {Mist.Nostr.Signer, signing_method: :local},
             Mist.Nostr.SubManager,
-            Mist.Jobs.FindUserRelays
-          ]
+            # Mist.Jobs.FindFollowGraph,
+            # Mist.Jobs.SecondHopNotes
+          ] ++
+            if Application.get_env(:mist, :skip_find_user_relays, false) do
+              []
+            else
+              [Mist.Jobs.FindUserRelays]
+            end
         end ++
         [MistWeb.Endpoint]
 

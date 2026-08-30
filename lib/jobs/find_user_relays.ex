@@ -83,10 +83,10 @@ defmodule Mist.Jobs.FindUserRelays do
     Logger.info("Searching #{relay_type} for #{length(pubkeys)} profiles")
 
     case Relay.maybe_connect_relays(relay_list) do
-      {:ok, []} ->
+      {:ok, [], _failed} ->
         Logger.error("Failed to connect to any #{relay_type}")
 
-      {:ok, connected_relays} ->
+      {:ok, connected_relays, _failed} ->
         subscribe_and_wait(pubkeys, connected_relays, relay_type)
     end
   end
@@ -97,10 +97,12 @@ defmodule Mist.Jobs.FindUserRelays do
 
     with {:ok, sub} <- NostrEx.create_sub(filter),
          :ok <- NostrEx.listen(sub),
-         {:ok, sub_id} <- NostrEx.send_sub(sub, send_via: relay_list) do
+         {:ok, sub_id, _failures} <- NostrEx.send_sub(sub, send_via: relay_list) do
       Logger.info("Subscribed to #{relay_type} with sub_id: #{sub_id}")
       handle_subscription_events(sub_id, relay_list, relay_type)
     else
+      {:error, :no_relays, _relays} ->
+        Logger.error("Failed to subscribe to #{relay_type}: no relays connected")
       {:error, reason} ->
         Logger.error("Failed to subscribe to #{relay_type}: #{inspect(reason)}")
     end

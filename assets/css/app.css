@@ -229,9 +229,21 @@ tr:hover {
   background: var(--bg-secondary);
   border: 1px solid var(--border-dark);
   border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 1rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
   transition: all 0.2s ease;
+}
+
+#graph-container {
+  background-color: var(--bg-primary);
+  background-image:
+    radial-gradient(1px 1px at 15% 25%, rgba(255,255,255,0.06), transparent),
+    radial-gradient(1px 1px at 55% 65%, rgba(255,255,255,0.04), transparent),
+    radial-gradient(1px 1px at 85% 15%, rgba(255,255,255,0.05), transparent),
+    radial-gradient(1px 1px at 35% 85%, rgba(255,255,255,0.03), transparent),
+    radial-gradient(1px 1px at 75% 45%, rgba(255,255,255,0.04), transparent);
+  background-size: 250px 250px;
+  background-repeat: repeat;
 }
 
 .note-card:hover {

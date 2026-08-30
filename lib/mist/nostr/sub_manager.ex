@@ -42,9 +42,18 @@ defmodule Mist.Nostr.SubManager do
 
   @feed_kinds [1, 6, 7, 9735]
   @meta_kinds [0, 3, 10002]
+  @profile_kinds [0]
   @chunk_size 200
   @reconcile_debounce 1_000
   @tick_interval 5 * 60 * 1_000
+  @backfill_interval 10 * 60 * 1_000
+  @backfill_initial_delay 3_000
+  # Profile backfill subs are one-shot kind-0 fetches: relays hold REQs
+  # open until CLOSE (and cap concurrent REQs), so they are closed on this
+  # TTL instead of lingering for the lifetime of the session.
+  @profile_sub_ttl 30_000
+  @permanent_blacklist_threshold 3
+  @dead_relay_expiry_seconds 7 * 24 * 3600
   @identity_retry_interval 200
   @identity_max_retries 50
 
@@ -62,7 +71,10 @@ defmodule Mist.Nostr.SubManager do
             meta_sub: nil,
             meta_relay_hint: nil,
             identity_retries: 0,
-            reconcile_timer: nil
+            reconcile_timer: nil,
+            profiles_fetched: MapSet.new(),
+            profile_subs: MapSet.new(),
+            relay_health: %{}
 
   # feed: %{relay_url => %{sub_id => MapSet.t(pubkey)}}
   # named: %{name => sub_id}
@@ -102,12 +114,15 @@ defmodule Mist.Nostr.SubManager do
   end
 
   @doc "Fetch kind 0 (profile) and kind 10002 (relay list) events for the given pubkeys."
+  # No `since` filter on purpose: kind-0/10002 events are not persisted to the
+  # events table, so `Notes.since_for_filter/1` would always fall back to the
+  # 24h window and miss virtually all historical profile events. These subs
+  # are one-shot and limit-capped, so fetching all-time is correct and cheap.
   def subscribe_profiles(pubkeys, opts \\ []) when is_list(pubkeys) do
-    kinds = [0, 10002]
-    since = Notes.since_for_filter(kinds: kinds, authors: pubkeys)
+    kinds = @profile_kinds
     limit = Notes.default_limit()
 
-    case NostrEx.create_sub(authors: pubkeys, kinds: kinds, since: since, limit: limit) do
+    case NostrEx.create_sub(authors: pubkeys, kinds: kinds, limit: limit) do
       {:ok, sub} -> subscribe(sub, opts)
       {:error, reason} -> Logger.error("SubManager: failed to create profile subscription: #{inspect(reason)}")
     end
@@ -139,7 +154,30 @@ defmodule Mist.Nostr.SubManager do
   @impl GenServer
   def handle_continue(:start, state) do
     Process.send_after(self(), :reconcile_tick, @tick_interval)
+    state = load_persistent_blacklist(state)
     {:noreply, resolve_identity(state)}
+  end
+
+  defp load_persistent_blacklist(state) do
+    rows =
+      from(r in Mist.Relay.Info, where: not is_nil(r.blacklisted_at))
+      |> Repo.all()
+
+    Enum.reduce(rows, state, fn relay, acc ->
+      host = Relay.relay_name(relay.url)
+      reason = if relay.blacklist_reason == "auth", do: :auth, else: :connection_failed
+      blacklisted_at = DateTime.to_unix(relay.blacklisted_at, :second)
+
+      entry = %{
+        failures: relay.failure_count,
+        blackout_until: 0,
+        permanent: true,
+        reason: reason,
+        blacklisted_at: blacklisted_at
+      }
+
+      %{acc | relay_health: Map.put(acc.relay_health, host, entry)}
+    end)
   end
 
   # The Signer sets the identity in its own handle_continue, which is not
@@ -155,6 +193,7 @@ defmodule Mist.Nostr.SubManager do
         state
 
       pubkey ->
+        Process.send_after(self(), :backfill_tick, @backfill_initial_delay)
         reconcile(%{state | identity: pubkey})
     end
   end
@@ -165,9 +204,11 @@ defmodule Mist.Nostr.SubManager do
   def handle_cast({:subscribe, filters, opts}, state) do
     with {:ok, {sub, send_opts}} <- prepare_subscription(filters, opts),
          :ok <- NostrEx.listen(sub),
-         {:ok, _sub_id} <- NostrEx.send_sub(sub, send_opts) do
+         {:ok, _sub_id, _failures} <- NostrEx.send_sub(sub, send_opts) do
       Logger.debug("SubManager: created subscription #{sub.id}")
     else
+      {:error, :no_relays, _relays} ->
+        Logger.error("SubManager: no relays connected for subscription")
       {:error, reason} ->
         Logger.error("SubManager: failed to create subscription: #{inspect(reason)}")
     end
@@ -180,10 +221,13 @@ defmodule Mist.Nostr.SubManager do
 
     with {:ok, {sub, send_opts}} <- prepare_subscription(filters, opts),
          :ok <- NostrEx.listen(sub),
-         {:ok, _sub_id} <- NostrEx.send_sub(sub, send_opts) do
+         {:ok, _sub_id, _failures} <- NostrEx.send_sub(sub, send_opts) do
       Logger.debug("SubManager: created named subscription #{name} -> #{sub.id}")
       {:noreply, %{state | named: Map.put(state.named, name, sub.id)}}
     else
+      {:error, :no_relays, _relays} ->
+        Logger.error("SubManager: no relays connected for named subscription #{name}")
+        {:noreply, state}
       {:error, reason} ->
         Logger.error("SubManager: failed to create named subscription #{name}: #{inspect(reason)}")
         {:noreply, state}
@@ -210,6 +254,7 @@ defmodule Mist.Nostr.SubManager do
       state
       |> close_all_feed_subs()
       |> close_meta_sub()
+      |> close_profile_subs()
       |> Map.merge(%{identity: pubkey, meta_relay_hint: relay_hint})
 
     {:noreply, schedule_reconcile(state)}
@@ -240,11 +285,42 @@ defmodule Mist.Nostr.SubManager do
 
   def handle_info(:reconcile_tick, state) do
     Process.send_after(self(), :reconcile_tick, @tick_interval)
-    {:noreply, state |> heal_dead_relays() |> reconcile()}
+    {:noreply, state |> prune_expired_blacklists() |> heal_dead_relays() |> reconcile()}
   end
 
   def handle_info(:retry_identity, state) do
     {:noreply, resolve_identity(state)}
+  end
+
+  # Profile backfill runs on its own slow timer, decoupled from the reconcile
+  # cycle so it never amplifies reconcile churn. Fetches kind-0 for follows
+  # not yet fetched this session; no-ops once everyone's covered.
+  def handle_info(:backfill_tick, state) do
+    Process.send_after(self(), :backfill_tick, @backfill_interval)
+
+    if state.identity do
+      desired = desired_feeds(state.identity)
+      {:noreply, backfill_profiles(state, desired)}
+    else
+      {:noreply, state}
+    end
+  end
+
+  # TTL close for profile backfill subs: keeps concurrent REQs bounded on
+  # the relays. Events already in flight when the CLOSE lands are still
+  # dispatched and processed.
+  def handle_info({:close_profile_sub, sub_id}, state) do
+    if MapSet.member?(state.profile_subs, sub_id) do
+      Logger.debug("SubManager: closing profile backfill sub #{String.slice(sub_id, 0, 8)}")
+      NostrEx.close_sub(sub_id)
+      # Drop this process's listener registration for the sub topic too —
+      # SubManager is long-lived and would otherwise accumulate one registry
+      # entry per backfill sub forever.
+      Registry.unregister(NostrEx.PubSub, sub_id)
+      {:noreply, %{state | profile_subs: MapSet.delete(state.profile_subs, sub_id)}}
+    else
+      {:noreply, state}
+    end
   end
 
   # ── Event ingress ─────────────────────────────────────────
@@ -262,12 +338,46 @@ defmodule Mist.Nostr.SubManager do
     {:noreply, state}
   end
 
-  # Relay-initiated CLOSE (rate limit, filter rejection, ...). Evict the sub
-  # from state; the next reconcile tick reopens feed subs, and the UI
-  # re-creates named subs on its next apply.
+  # Relay-initiated CLOSE with a reason (NIP-01 CLOSED). If the reason
+  # indicates auth-required or rate-limiting — which we can't fulfill —
+  # permanently blacklist the relay so we stop thrashing. Its follows are
+  # rerouted to fallbacks on the next reconcile.
+  def handle_info({:close, sub_id, relay_host, message}, state) do
+    Logger.info("SubManager: #{relay_host} closed sub #{String.slice(sub_id, 0, 8)}: #{message}")
+
+    msg = String.downcase(message)
+    state =
+      if String.contains?(msg, "auth") or String.contains?(msg, "rate") do
+        permanent_blacklist(state, relay_host)
+      else
+        state
+      end
+
+    {:noreply, evict_sub(state, relay_host, sub_id)}
+  end
+
+  # Relay-initiated CLOSE without a reason (older relays). Evict and retry.
   def handle_info({:close, sub_id, relay_host}, state) do
     Logger.info("SubManager: #{relay_host} closed sub #{String.slice(sub_id, 0, 8)}")
     {:noreply, evict_sub(state, relay_host, sub_id)}
+  end
+
+  # NOTICE from a relay (dispatched by nostr_ex to all sub listeners on that
+  # relay). Auth-required notices that aren't paired with a CLOSED get caught
+  # here — instant permanent blacklist so we stop reconnecting to relays
+  # that demand NIP-42 auth we can't fulfill.
+  def handle_info({:notice, _sub_id, relay_host, message}, state) do
+    msg = String.downcase(message)
+
+    state =
+      if String.contains?(msg, "auth") do
+        permanent_blacklist(state, relay_host)
+      else
+        Logger.info("SubManager: notice from #{relay_host}: #{message}")
+        state
+      end
+
+    {:noreply, state}
   end
 
   def handle_info(msg, state) do
@@ -288,11 +398,269 @@ defmodule Mist.Nostr.SubManager do
 
   defp reconcile(state) do
     state = ensure_meta_sub(state)
-    desired = desired_feeds(state.identity)
+    raw_desired = desired_feeds(state.identity)
+
+    # Reroute follows whose advertised write relays are in a health blackout
+    # onto the fallback set, so dead relays don't silently drop their follows.
+    desired = reroute_blacklisted(state, raw_desired)
 
     state
     |> close_feed_subs_for_undesired_relays(desired)
     |> open_feed_subs_for_missing(desired)
+  end
+
+  ## Relay health & follow fallback
+
+  # Relays in a health blackout (repeated connect failures) are removed from
+  # the desired feed map and their follows redistributed across usable
+  # fallback relays, so a follow whose write relays are all dead still gets a
+  # feed subscription. If every fallback is also blacklisted, the follows are
+  # dropped this round and retried on the next reconcile.
+  @doc false
+  def reroute_blacklisted(state, desired) do
+    now = System.os_time(:second)
+    fallbacks = fallback_relays()
+    usable_fallbacks = Enum.reject(fallbacks, &blacklisted?(state, &1, now))
+
+    {kept, rerouted} =
+      Enum.reduce(desired, {%{}, MapSet.new()}, fn {relay, pubkeys}, {kept, acc} ->
+        if blacklisted?(state, relay, now) do
+          {kept, MapSet.union(acc, pubkeys)}
+        else
+          {Map.put(kept, relay, pubkeys), acc}
+        end
+      end)
+
+    if MapSet.size(rerouted) == 0 or usable_fallbacks == [] do
+      kept
+    else
+      Enum.reduce(usable_fallbacks, kept, fn fb, acc ->
+        Map.update(acc, fb, rerouted, &MapSet.union(&1, rerouted))
+      end)
+    end
+  end
+
+  defp prune_expired_blacklists(state) do
+    now = System.os_time(:second)
+
+    {keep, clear} =
+      Enum.split_with(state.relay_health, fn {_host, entry} ->
+        case entry do
+          %{permanent: true, reason: :connection_failed, blacklisted_at: ts}
+            when now - ts >= @dead_relay_expiry_seconds ->
+            false
+          _ ->
+            true
+        end
+      end)
+
+    for {host, _entry} <- clear do
+      Logger.info("SubManager: clearing expired blacklist for #{host} (7-day TTL)")
+      case Repo.get_by(Mist.Relay.Info, name: host) do
+        nil -> :ok
+        relay ->
+          Relay.Info.changeset(relay, %{
+            failure_count: 0,
+            blacklisted_at: nil,
+            blacklist_reason: nil
+          })
+          |> Repo.update()
+      end
+    end
+
+    %{state | relay_health: Map.new(keep)}
+  end
+
+  defp blacklisted?(state, url, now) do
+    host = Relay.relay_name(url)
+    case state.relay_health[host] do
+      %{permanent: true} -> true
+      %{blackout_until: until} when until > now -> true
+      _ -> false
+    end
+  end
+
+  # Record a connect failure with exponential backoff (30s, 60s, 120s, ...
+  # capped at 30min). After @permanent_blacklist_threshold failures the relay
+  # is permanently blacklisted — TLS errors, non-existent domains, etc. won't
+  # fix themselves, so stop retrying.
+  @doc false
+  def record_relay_failures(state, urls) do
+    now = System.os_time(:second)
+
+    Enum.reduce(urls, state, fn url, state ->
+      host = Relay.relay_name(url)
+      prev = state.relay_health[host] || %{failures: 0}
+      failures = prev.failures + 1
+
+      permanent = failures >= @permanent_blacklist_threshold
+      backoff = case failures do
+        1 -> 300
+        2 -> 900
+        _ -> 0
+      end
+
+      entry = %{failures: failures, blackout_until: now + backoff}
+      entry = if permanent, do: Map.merge(entry, %{permanent: true, reason: :connection_failed, blacklisted_at: now}), else: entry
+
+      if permanent and not match?(%{permanent: true}, prev) do
+        Logger.info("SubManager: permanently blacklisted #{host} (#{failures} connect failures)")
+        persist_blacklist(url, failures, "connection_failed")
+        # Kill the socket's reconnect loop, if one is still running.
+        NostrEx.disconnect(host)
+      end
+
+      %{state | relay_health: Map.put(state.relay_health, host, entry)}
+    end)
+  end
+
+  # Permanently blacklist a relay by host (used for auth-required / rate-
+  # limited relays that we can't fulfill). The relay's follows are rerouted
+  # to fallbacks on the next reconcile via reroute_blacklisted.
+  @doc false
+  def permanent_blacklist(state, host) do
+    host = if String.starts_with?(host, "wss://") or String.starts_with?(host, "ws://"),
+      do: Relay.relay_name(host), else: host
+
+    case state.relay_health[host] do
+      %{permanent: true} ->
+        state
+
+      _ ->
+        Logger.info("SubManager: permanently blacklisted #{host} (auth required / rate limited)")
+        persist_blacklist(host, 99, "auth")
+        # Kill the socket's reconnect loop, if one is still running.
+        NostrEx.disconnect(host)
+        now = System.os_time(:second)
+        %{state | relay_health: Map.put(state.relay_health, host, %{failures: 99, blackout_until: 0, permanent: true, reason: :auth, blacklisted_at: now})}
+    end
+  end
+
+  # A successful connect clears any prior failure history for the relay.
+  @doc false
+  def clear_relay_failures(state, urls) do
+    hosts = Enum.map(urls, &Relay.relay_name(&1))
+
+    for url <- urls do
+      case Relay.get_relay_by_url(url) do
+        {:ok, relay} ->
+          Relay.Info.changeset(relay, %{
+            failure_count: 0,
+            blacklisted_at: nil,
+            blacklist_reason: nil
+          })
+          |> Repo.update()
+        {:error, _} -> :ok
+      end
+    end
+
+    %{state | relay_health: Map.drop(state.relay_health, hosts)}
+  end
+
+  defp persist_blacklist(url_or_host, failure_count, reason) do
+    url = if String.starts_with?(url_or_host, "wss://") or String.starts_with?(url_or_host, "ws://"),
+      do: url_or_host, else: nil
+
+    relay =
+      cond do
+        is_binary(url) ->
+          case Relay.get_relay_by_url(url) do
+            {:ok, r} -> r
+            {:error, _} -> nil
+          end
+        true ->
+          host = String.downcase(url_or_host)
+          Repo.get_by(Mist.Relay.Info, name: host)
+      end
+
+    if relay do
+      Relay.Info.changeset(relay, %{
+        failure_count: failure_count,
+        blacklisted_at: DateTime.utc_now() |> DateTime.truncate(:second),
+        blacklist_reason: reason
+      })
+      |> Repo.update()
+    end
+  end
+
+  ## Profile backfill
+
+  # Profiles (kind 0) for all follows — and the second hop of the follow
+  # graph, so second-hop authors get names/avatars — are fetched once per
+  # session on a slow background timer (every 10 min, first pass 3s after
+  # identity is set). Decoupled from reconcile so it never amplifies
+  # reconcile churn; no-ops once everyone is fetched.
+  @doc false
+  def backfill_profiles(state, desired) do
+    follows = desired |> Map.values() |> Enum.reduce(MapSet.new(), &MapSet.union/2)
+
+    secondary =
+      if state.identity do
+        state.identity
+        |> Profile.second_hop_pubkeys(Application.get_env(:mist, :second_hop_cap, 300))
+        |> MapSet.new()
+      else
+        MapSet.new()
+      end
+
+    all = MapSet.union(follows, secondary)
+    new = MapSet.difference(all, state.profiles_fetched)
+
+    if MapSet.size(new) == 0 do
+      state
+    else
+      # purplepag.es is a kind-0 directory; fallbacks cover the rest.
+      # Skip relays that are permanently blacklisted (auth-required, dead).
+      now = System.os_time(:second)
+      relays =
+        Enum.uniq([bootstrap_relay() | fallback_relays()])
+        |> Enum.reject(&blacklisted?(state, &1, now))
+
+      {fetched, sub_ids} =
+        new
+        |> MapSet.to_list()
+        |> Enum.chunk_every(@chunk_size)
+        |> Enum.reduce({[], MapSet.new()}, fn chunk, {pubkeys, subs} ->
+          case open_profile_sub(chunk, relays) do
+            {:ok, sub_id} ->
+              Process.send_after(self(), {:close_profile_sub, sub_id}, @profile_sub_ttl)
+              {pubkeys ++ chunk, MapSet.put(subs, sub_id)}
+
+            :error ->
+              {pubkeys, subs}
+          end
+        end)
+
+      %{
+        state
+        | profiles_fetched: Enum.reduce(fetched, state.profiles_fetched, &MapSet.put(&2, &1)),
+          profile_subs: MapSet.union(state.profile_subs, sub_ids)
+      }
+    end
+  end
+
+  # See subscribe_profiles/2 for why there is no `since` here.
+  defp open_profile_sub(pubkeys, relays) do
+    limit = Notes.default_limit()
+
+    with {:ok, sub} <- NostrEx.create_sub(authors: pubkeys, kinds: @profile_kinds, limit: limit),
+         :ok <- NostrEx.listen(sub),
+         {:ok, sub_id, _failures} <- NostrEx.send_sub(sub, send_via: relays) do
+      Logger.info("SubManager: profile backfill sub for #{length(pubkeys)} pubkey(s)")
+      {:ok, sub_id}
+    else
+      {:error, :no_relays, _relays} ->
+        Logger.error("SubManager: no relays connected for profile backfill")
+        :error
+
+      {:error, reason, _failures} ->
+        Logger.error("SubManager: failed to open profile backfill sub: #{inspect(reason)}")
+        :error
+
+      {:error, reason} ->
+        Logger.error("SubManager: failed to open profile backfill sub: #{inspect(reason)}")
+        :error
+    end
   end
 
   ## Self-meta subscription
@@ -305,11 +673,11 @@ defmodule Mist.Nostr.SubManager do
   defp ensure_meta_sub(state) do
     relay = state.meta_relay_hint || bootstrap_relay()
 
-    with {:ok, connected} <- Relay.maybe_connect_relays([relay]),
+    with {:ok, connected, _failed} <- Relay.maybe_connect_relays([relay]),
          true <- relay in connected,
          {:ok, sub} <- NostrEx.create_sub(authors: [state.identity], kinds: @meta_kinds),
          :ok <- NostrEx.listen(sub),
-         {:ok, sub_id} <- NostrEx.send_sub(sub, send_via: [relay]) do
+         {:ok, sub_id, _failures} <- NostrEx.send_sub(sub, send_via: [relay]) do
       Logger.info("SubManager: self-meta sub on #{relay}")
       %{state | meta_sub: sub_id}
     else
@@ -324,6 +692,15 @@ defmodule Mist.Nostr.SubManager do
   defp close_meta_sub(%{meta_sub: sub_id} = state) do
     NostrEx.close_sub(sub_id)
     %{state | meta_sub: nil}
+  end
+
+  defp close_profile_subs(%{profile_subs: subs} = state) do
+    Enum.each(subs, fn sub_id ->
+      NostrEx.close_sub(sub_id)
+      Registry.unregister(NostrEx.PubSub, sub_id)
+    end)
+
+    %{state | profile_subs: MapSet.new()}
   end
 
   defp bootstrap_relay do
@@ -348,11 +725,41 @@ defmodule Mist.Nostr.SubManager do
 
     desired = Map.new(by_relay, fn {relay, pubkeys} -> {relay, MapSet.new(pubkeys)} end)
 
-    Enum.reduce(uncovered, desired, fn pubkey, acc ->
+    desired = Enum.reduce(uncovered, desired, fn pubkey, acc ->
       Enum.reduce(fallback_relays(), acc, fn relay, acc2 ->
         Map.update(acc2, relay, MapSet.new([pubkey]), &MapSet.put(&1, pubkey))
       end)
     end)
+
+    cap_feed_relays(desired)
+  end
+
+  # Hard cap on the number of feed relays. Sorts by coverage (number of
+  # pubkeys served) descending, keeps the top N, and redistributes the
+  # cut-off relays' follows across fallback relays. Only active in dev.
+  defp cap_feed_relays(desired) do
+    cap = Application.get_env(:mist, :max_feed_relays, 0)
+
+    if cap > 0 and map_size(desired) > cap do
+      fallbacks = fallback_relays()
+
+      {kept, cut} =
+        desired
+        |> Enum.sort_by(fn {_relay, pubkeys} -> MapSet.size(pubkeys) end, :desc)
+        |> Enum.split(cap)
+
+      kept = Map.new(kept)
+
+      Enum.reduce(cut, kept, fn {_relay, pubkeys}, acc ->
+        Enum.reduce(pubkeys, acc, fn pubkey, acc2 ->
+          Enum.reduce(fallbacks, acc2, fn relay, acc3 ->
+            Map.update(acc3, relay, MapSet.new([pubkey]), &MapSet.put(&1, pubkey))
+          end)
+        end)
+      end)
+    else
+      desired
+    end
   end
 
   defp close_feed_subs_for_undesired_relays(state, desired) do
@@ -371,7 +778,7 @@ defmodule Mist.Nostr.SubManager do
   end
 
   defp open_feed_subs_for_missing(state, desired) do
-    # Compute missing pubkeys per relay first...
+    # Wanted pubkeys per relay that aren't already covered by an existing sub.
     missing_by_relay =
       Map.new(desired, fn {relay, wanted} ->
         covered =
@@ -384,19 +791,26 @@ defmodule Mist.Nostr.SubManager do
       end)
       |> Map.reject(fn {_relay, missing} -> MapSet.size(missing) == 0 end)
 
-    # ...then connect to all needed relays concurrently (one batch)...
-    {:ok, connected} = Relay.maybe_connect_relays(Map.keys(missing_by_relay))
+    if map_size(missing_by_relay) == 0 do
+      state
+    else
+      {:ok, connected, failed} = Relay.maybe_connect_relays(Map.keys(missing_by_relay))
+      state = record_relay_failures(state, failed)
+      state = clear_relay_failures(state, connected)
 
-    # ...and open subscriptions only on relays that are actually connected.
-    feed =
-      Enum.reduce(connected, state.feed, fn relay, feed ->
-        missing = Map.fetch!(missing_by_relay, relay)
-        open = Map.get(feed, relay, %{})
-        new_subs = open_feed_chunks(relay, MapSet.to_list(missing))
-        Map.put(feed, relay, Map.merge(open, new_subs))
-      end)
+      # Open subs only on relays that actually connected. Follows on relays
+      # that failed this round stay in `desired`; the failure is recorded
+      # and the next reconcile reroutes them to fallbacks via blackout.
+      feed =
+        Enum.reduce(connected, state.feed, fn relay, feed ->
+          missing = Map.fetch!(missing_by_relay, relay)
+          open = Map.get(feed, relay, %{})
+          new_subs = open_feed_chunks(relay, MapSet.to_list(missing))
+          Map.put(feed, relay, Map.merge(open, new_subs))
+        end)
 
-    %{state | feed: feed}
+      %{state | feed: feed}
+    end
   end
 
   defp open_feed_chunks(relay, pubkeys) do
@@ -409,11 +823,14 @@ defmodule Mist.Nostr.SubManager do
       with {:ok, sub} <-
              NostrEx.create_sub(authors: chunk, kinds: @feed_kinds, since: since, limit: limit),
            :ok <- NostrEx.listen(sub),
-           {:ok, sub_id} <- NostrEx.send_sub(sub, send_via: [relay]) do
+           {:ok, sub_id, _failures} <- NostrEx.send_sub(sub, send_via: [relay]) do
         Logger.info("SubManager: feed sub on #{relay} for #{length(chunk)} pubkey(s)")
         Map.put(acc, sub_id, MapSet.new(chunk))
       else
-        {:error, reason} ->
+        {:error, :no_relays, _relays} ->
+          Logger.error("SubManager: no relays connected for feed sub on #{relay}")
+          acc
+        {:error, reason, _failures} ->
           Logger.error("SubManager: failed to open feed sub on #{relay}: #{inspect(reason)}")
           acc
       end
@@ -435,7 +852,8 @@ defmodule Mist.Nostr.SubManager do
       state
     else
       Logger.info("SubManager: reconnecting dead feed relays: #{Enum.join(dead, ", ")}")
-      Relay.maybe_connect_relays(dead)
+      {:ok, _connected, failed} = Relay.maybe_connect_relays(dead)
+      state = record_relay_failures(state, failed)
 
       # Subscriptions on dead relays are gone relay-side and in NostrEx's
       # RelayAgent; drop them from state so reconcile reopens them.

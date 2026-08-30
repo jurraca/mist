@@ -1,0 +1,11 @@
+<%!-- Full-bleed layout for the notes feed: the conversation graph fills
+    the viewport (minus the header). List view centers its own content. --%>
+<div class="h-screen flex flex-col overflow-hidden bg-dark-primary">
+  <.app_header />
+  <div class="absolute top-20 right-4 z-50">
+    <.flash_group flash={@flash} />
+  </div>
+  <main class="flex-1 min-h-0 flex">
+    {@inner_content}
+  </main>
+</div>

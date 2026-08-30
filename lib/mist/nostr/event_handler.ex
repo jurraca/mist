@@ -44,8 +44,15 @@ defmodule Mist.Nostr.EventHandler do
   end
 
   def process_event(%Event{kind: 1} = event) do
-    persist_event(event)
-    Phoenix.PubSub.broadcast(Mist.PubSub, "notes", Notes.note_view(event))
+    case persist_event(event) do
+      :new ->
+        Phoenix.PubSub.broadcast(Mist.PubSub, "notes", Notes.note_view(event))
+
+      _ ->
+        # Duplicate copy from another relay: already persisted (and
+        # broadcast) by the first copy — do not re-broadcast.
+        :ok
+    end
   end
 
   def process_event(%Event{kind: 3, pubkey: pubkey, tags: tags} = event) do
@@ -56,14 +63,20 @@ defmodule Mist.Nostr.EventHandler do
 
   # Reactions (7), boosts/reposts (6), zap receipts (9735)
   def process_event(%Event{kind: kind, tags: tags} = event) when kind in @interaction_kinds do
-    persist_event(event)
+    case persist_event(event) do
+      :new ->
+        case extract_referenced_note_id(tags) do
+          {:ok, note_id} ->
+            broadcast_count_update(note_id)
 
-    case extract_referenced_note_id(tags) do
-      {:ok, note_id} ->
-        broadcast_count_update(note_id)
+          :error ->
+            Logger.debug("Could not find referenced note in kind #{kind} event")
+        end
 
-      :error ->
-        Logger.debug("Could not find referenced note in kind #{kind} event")
+      _ ->
+        # Duplicate: the first copy already recomputed and broadcast the
+        # DB-derived counts; a duplicate cannot change them.
+        :ok
     end
   end
 
@@ -73,6 +86,9 @@ defmodule Mist.Nostr.EventHandler do
     Phoenix.PubSub.broadcast(Mist.PubSub, topic, event)
   end
 
+  # Persists the event; returns :new when this call inserted the row,
+  # :duplicate when the event_id already existed (another relay delivered
+  # the same event first), or {:error, changeset} on validation failure.
   defp persist_event(%Event{} = event) do
     attrs = %{
       event_id: event.id,
@@ -90,12 +106,14 @@ defmodule Mist.Nostr.EventHandler do
          ) do
       {:ok, %{id: id}} when not is_nil(id) ->
         persist_tags(id, event.tags)
+        :new
 
       {:ok, _} ->
-        :ok
+        :duplicate
 
       {:error, changeset} ->
         Logger.debug("Failed to persist kind #{event.kind} event: #{inspect(changeset.errors)}")
+        {:error, changeset}
     end
   end
 

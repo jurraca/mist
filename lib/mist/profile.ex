@@ -69,7 +69,7 @@ defmodule Mist.Profile do
 
   def sub_via_relays(pubkey, [h | _] = relays) do
     case Relay.maybe_connect_relays([h]) do
-      {:ok, connected} ->
+      {:ok, connected, _failed} ->
         if h in connected do
           SubManager.subscribe_profiles([pubkey], send_via: [h])
         else
@@ -171,10 +171,14 @@ defmodule Mist.Profile do
       else
         pubkeys = Enum.map(tag_data, &elem(&1, 0))
 
+        # Every row must share the same key set: ecto_sqlite3 cannot
+        # interpolate cell-wise defaults for heterogeneous multi-row
+        # INSERTs (real kind-3 events mix p-tags with and without relay
+        # hints). Explicit nil is equivalent to an omitted column here —
+        # the schema has no default and on_conflict keeps stubs untouched.
         profile_rows =
           Enum.map(tag_data, fn {pubkey, relay, _petname} ->
-            base = %{pubkey: pubkey, inserted_at: now, updated_at: now}
-            if relay, do: Map.put(base, :relay, relay), else: base
+            %{pubkey: pubkey, relay: relay, inserted_at: now, updated_at: now}
           end)
 
         Repo.insert_all(Profile, profile_rows, on_conflict: :nothing)
@@ -413,6 +417,40 @@ defmodule Mist.Profile do
     Repo.all(query)
     |> Enum.uniq()
     |> Enum.group_by(& &1.relay, & &1.pubkey)
+  end
+
+  @doc """
+  Pubkeys of the second hop of the follow graph: profiles followed by my
+  follows, ranked by how many of my follows follow them (descending), capped
+  at `cap`. Excludes the identity itself and direct follows. Returns [] when
+  the identity has no profile or when `cap` is 0 (feature disabled).
+  """
+  def second_hop_pubkeys(identity_pubkey, cap \\ 300)
+
+  def second_hop_pubkeys(_identity_pubkey, cap) when cap <= 0, do: []
+
+  def second_hop_pubkeys(identity_pubkey, cap) when is_binary(identity_pubkey) do
+    case Repo.get_by(Profile, pubkey: identity_pubkey) do
+      nil ->
+        []
+
+      me ->
+        direct_follow_ids =
+          from(f in Follows, where: f.follower_id == ^me.id, select: f.followed_id)
+
+        from(sh in Follows,
+          join: followed in Profile,
+          on: sh.followed_id == followed.id,
+          join: my in Follows,
+          on: sh.follower_id == my.followed_id and my.follower_id == ^me.id,
+          where: sh.followed_id != ^me.id and sh.followed_id not in subquery(direct_follow_ids),
+          group_by: followed.pubkey,
+          order_by: [desc: count(sh.id)],
+          limit: ^cap,
+          select: followed.pubkey
+        )
+        |> Repo.all()
+    end
   end
 
   @doc """

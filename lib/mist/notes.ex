@@ -31,10 +31,7 @@ defmodule Mist.Notes do
               EventHandler.process_event(signed)
               {:ok, signed, {:relay_error, failures}}
 
-            {:error, reason} ->
-              {:ok, signed, {:error, reason}}
-
-            {:error, _msg, failures} ->
+            {:error, _reason, failures} ->
               {:ok, signed, {:error, failures}}
           end
       end
@@ -180,9 +177,14 @@ defmodule Mist.Notes do
   have at least one reply edge to or from another note in the result set.
 
   Parent notes referenced by in-window replies are included even when older
-  than the window, as long as they are authored by the given pubkeys (network
-  only — no randos). Mentions (`e` tags marked "mention") do not count as
-  reply edges. Reads only the DB; never triggers relay fetches.
+  than the window, as long as they are authored by the given pubkeys or by
+  `secondary_pubkeys` (the second hop of the follow graph). Mentions (`e`
+  tags marked "mention") do not count as reply edges. Reads only the DB;
+  never triggers relay fetches.
+
+  Secondary-authored notes are only included when reply-linked to a
+  network-authored note (either direction) — standalone secondary posts and
+  secondary-only threads are persisted but invisible.
   """
   def list_conversations(pubkeys, since_unix, opts \\ [])
 
@@ -190,6 +192,15 @@ defmodule Mist.Notes do
 
   def list_conversations(pubkeys, since_unix, opts) when is_integer(since_unix) do
     limit = Keyword.get(opts, :limit, 500)
+    secondary_limit = Keyword.get(opts, :secondary_limit, 1000)
+
+    network = MapSet.new(pubkeys)
+
+    secondary =
+      opts
+      |> Keyword.get(:secondary_pubkeys, [])
+      |> MapSet.new()
+      |> MapSet.difference(network)
 
     window_notes =
       from(e in Event,
@@ -202,6 +213,8 @@ defmodule Mist.Notes do
 
     window_ids = MapSet.new(window_notes, & &1.event_id)
 
+    # Parents referenced by network window notes — fetched when authored by
+    # network or secondary pubkeys (strangers stay out).
     parent_ids =
       window_notes
       |> conversation_edges()
@@ -209,25 +222,92 @@ defmodule Mist.Notes do
       |> Enum.uniq()
       |> Enum.reject(&MapSet.member?(window_ids, &1))
 
-    parents =
-      from(e in Event,
-        where: e.kind == 1 and e.event_id in ^parent_ids and e.pubkey in ^pubkeys,
-        preload: [:tags]
-      )
-      |> Mist.Repo.all()
+    fetch_pubkeys = Enum.uniq(pubkeys ++ MapSet.to_list(secondary))
 
-    all = window_notes ++ parents
+    parents =
+      case parent_ids do
+        [] ->
+          []
+
+        ids ->
+          from(e in Event,
+            where: e.kind == 1 and e.event_id in ^ids and e.pubkey in ^fetch_pubkeys,
+            preload: [:tags]
+          )
+          |> Mist.Repo.all()
+      end
+
+    # Secondary replies to network notes: secondary-authored kind-1 events
+    # in the window whose e-tag points at a network note already in the set.
+    network_ids =
+      (window_notes ++ parents)
+      |> Enum.filter(&MapSet.member?(network, &1.pubkey))
+      |> MapSet.new(& &1.event_id)
+
+    secondary_replies =
+      if MapSet.size(secondary) == 0 or MapSet.size(network_ids) == 0 do
+        []
+      else
+        secondary_list = MapSet.to_list(secondary)
+        network_id_list = MapSet.to_list(network_ids)
+
+        from(e in Event,
+          join: t in Tags,
+          on: t.event_id == e.id,
+          where:
+            e.kind == 1 and e.pubkey in ^secondary_list and
+              e.created_at >= ^since_unix and
+              t.key == "e" and t.value in ^network_id_list,
+          # Joined duplicate rows are identical (only event columns are
+          # selected), so a plain DISTINCT dedupes them — SQLite has no
+          # DISTINCT ON.
+          distinct: true,
+          limit: ^secondary_limit,
+          preload: [:tags]
+        )
+        |> Mist.Repo.all()
+      end
+
+    all = Enum.uniq_by(window_notes ++ parents ++ secondary_replies, & &1.id)
     all_ids = MapSet.new(all, & &1.event_id)
 
-    participant_ids =
+    edges =
       all
       |> conversation_edges()
       |> Enum.filter(&MapSet.member?(all_ids, &1.source))
+
+    # Network notes render when they participate in any conversation edge.
+    participants =
+      edges
       |> Enum.flat_map(&[&1.source, &1.target])
       |> MapSet.new()
 
+    # Secondary notes render only when reply-linked to a network note.
+    network_in_set =
+      all
+      |> Enum.filter(&MapSet.member?(network, &1.pubkey))
+      |> MapSet.new(& &1.event_id)
+
+    secondary_anchored =
+      edges
+      |> Enum.flat_map(fn
+        %{source: s, target: t} ->
+          cond do
+            MapSet.member?(network_in_set, s) -> [t]
+            MapSet.member?(network_in_set, t) -> [s]
+            true -> []
+          end
+      end)
+      |> MapSet.new()
+
     all
-    |> Enum.filter(&MapSet.member?(participant_ids, &1.event_id))
+    |> Enum.filter(fn note ->
+      if MapSet.member?(network, note.pubkey) do
+        MapSet.member?(participants, note.event_id)
+      else
+        MapSet.member?(secondary_anchored, note.event_id)
+      end
+    end)
     |> Enum.sort_by(& &1.created_at, :desc)
     |> assemble_notes()
   end
@@ -298,6 +378,8 @@ defmodule Mist.Notes do
   end
 
   defp build_note_view(event, profile, counts) do
+    tags = normalize_tags(event)
+
     %{
       id: event_id(event),
       pubkey: event.pubkey,
@@ -305,13 +387,27 @@ defmodule Mist.Notes do
       created_at: unix_created_at(event),
       sig: event.sig,
       kind: event.kind,
-      tags: normalize_tags(event),
+      tags: tags,
+      reply_to: reply_parent(tags),
       author: if(profile, do: profile.name, else: nil),
+      picture: if(profile, do: profile.picture, else: nil),
       bot: if(profile, do: profile.bot, else: false),
       reaction_count: counts.reaction_count,
       boost_count: counts.boost_count,
       zap_amount: counts.zap_amount
     }
+  end
+
+  # The parent note a reply answers to, as a hex event id: the first
+  # non-mention "e" tag, preferring the NIP-10 "reply" marker (direct
+  # parent) over "root" or unmarked tags. nil for top-level notes.
+  defp reply_parent(tags) do
+    e_tags = for %{type: "e", data: id, info: info} <- tags, is_binary(id) and id != "", "mention" not in info, do: {id, info}
+
+    case Enum.find(e_tags, fn {_id, info} -> "reply" in info end) || List.first(e_tags) do
+      {id, _} -> id
+      nil -> nil
+    end
   end
 
   defp event_id(%NostrCore.Event{id: id}), do: id

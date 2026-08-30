@@ -9,13 +9,14 @@ defmodule MistWeb.NoteLive.Index do
   alias Mist.Subscriptions
   alias MistWeb.NoteLive.GraphUpdater
 
-  @default_lookback_seconds 86_400
+  @default_lookback_seconds 36 * 3_600
 
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Mist.PubSub, "notes")
       Phoenix.PubSub.subscribe(Mist.PubSub, "note_counts")
+      Phoenix.PubSub.subscribe(Mist.PubSub, "profiles")
     end
 
     relays = NostrEx.list_relays()
@@ -31,13 +32,15 @@ defmodule MistWeb.NoteLive.Index do
           {[], []}
       end
 
+    secondary_pubkeys = secondary_hop(follow_pubkeys)
+
     stored_notes = Notes.list_recent_by_pubkeys(follow_pubkeys)
 
     lookback_seconds = @default_lookback_seconds
 
     initial_graph =
       follow_pubkeys
-      |> Notes.list_conversations(lookback_since(lookback_seconds))
+      |> Notes.list_conversations(lookback_since(lookback_seconds), secondary_pubkeys: secondary_pubkeys)
       |> GraphUpdater.from_notes()
 
     has_local_keypair = match?({:ok, _}, Keys.get_private_key())
@@ -55,10 +58,12 @@ defmodule MistWeb.NoteLive.Index do
       |> assign(:follow_lists, follow_lists)
       |> assign(:follow_pubkeys, follow_pubkeys)
       |> assign(:source_pubkeys, MapSet.new(follow_pubkeys))
+      |> assign(:secondary_pubkeys, MapSet.new(secondary_pubkeys))
       |> assign(:lookback_seconds, lookback_seconds)
       |> assign(:selected_list, nil)
       |> assign(:list_pubkeys, [])
       |> assign(:pending_graph_updates, [])
+      |> assign(:pending_stream_notes, [])
       |> assign(:batch_timer_ref, nil)
       |> assign(:has_local_keypair, has_local_keypair)
       |> assign(:saved_subscriptions, saved_subscriptions)
@@ -104,19 +109,41 @@ defmodule MistWeb.NoteLive.Index do
     {:noreply, new_socket}
   end
 
+  # Only kind-1 note views (built by Notes.note_view/1, always kind: 1) are
+  # notes. The "profiles" topic also delivers raw %NostrCore.Event{} kind-3
+  # follow lists (see EventHandler), which must not enter the note stream —
+  # they lack note-view keys (:picture, :author, counts) and would crash
+  # the template.
   @impl true
-  def handle_info(%{id: _, pubkey: _, content: _} = note_data, socket) do
+  def handle_info(%{id: _, pubkey: _, content: _, kind: 1} = note_data, socket) do
     new_socket =
       socket
-      |> stream_insert(:notes, note_data, at: 0)
+      |> maybe_stream_note(note_data)
       |> maybe_queue_graph_update(note_data)
 
     {:noreply, new_socket}
   end
 
+  # Kind-0 arrivals (backfilled by SubManager) fill in author/picture on
+  # graph nodes already on screen — no reload needed for avatars to appear.
+  @impl true
+  def handle_info(%Profile.Profile{} = profile, socket) do
+    update = %{author: profile.name, picture: profile.picture}
+    graph = GraphUpdater.update_profile(socket.assigns.graph_data, profile.pubkey, update)
+
+    {:noreply,
+     socket
+     |> assign(:graph_data, graph)
+     |> push_event("graph_profile_update", Map.put(update, :pubkey, profile.pubkey))}
+  end
+
   @impl true
   def handle_info(:process_graph_batch, socket) do
-    socket = process_batched_graph_updates(socket)
+    socket =
+      socket
+      |> process_batched_graph_updates()
+      |> flush_pending_stream_notes()
+
     {:noreply, assign(socket, :batch_timer_ref, nil)}
   end
 
@@ -172,7 +199,7 @@ defmodule MistWeb.NoteLive.Index do
           |> assign(:selected_list, list_id)
           |> assign(:list_pubkeys, list_pubkeys)
           |> assign(:source_pubkeys, MapSet.new(list_pubkeys))
-          |> assign(:selected_subscription_id, nil)
+          |> assign(:secondary_pubkeys, MapSet.new())
           |> clear_ui_state()
           |> reload_notes_for_filter()
 
@@ -189,6 +216,7 @@ defmodule MistWeb.NoteLive.Index do
           |> assign(:selected_subscription_id, sub_id)
           |> assign(:selected_list, nil)
           |> assign(:source_pubkeys, nil)
+          |> assign(:secondary_pubkeys, MapSet.new())
           |> clear_ui_state()
           |> reload_notes_for_filter()
 
@@ -207,12 +235,18 @@ defmodule MistWeb.NoteLive.Index do
 
         source_pubkeys = if filter_atom == :following, do: MapSet.new(socket.assigns.follow_pubkeys), else: nil
 
+        secondary_pubkeys =
+          if filter_atom == :following,
+            do: MapSet.new(secondary_hop(socket.assigns.follow_pubkeys)),
+            else: MapSet.new()
+
         socket =
           socket
           |> assign(:subscription_filter, filter_atom)
           |> assign(:selected_list, nil)
           |> assign(:selected_subscription_id, nil)
           |> assign(:source_pubkeys, source_pubkeys)
+          |> assign(:secondary_pubkeys, secondary_pubkeys)
           |> clear_ui_state()
           |> reload_notes_for_filter()
 
@@ -254,10 +288,26 @@ defmodule MistWeb.NoteLive.Index do
     |> stream(:notes, [], reset: true)
     |> assign(:graph_data, GraphUpdater.new())
     |> assign(:pending_graph_updates, [])
+    |> assign(:pending_stream_notes, [])
     |> assign(:batch_timer_ref, nil)
   end
 
   defp lookback_since(lookback_seconds), do: System.os_time(:second) - lookback_seconds
+
+  # Second hop of the follow graph (profiles my follows follow, ranked and
+  # capped). Notes by these authors are fetched by Mist.Jobs.SecondHopNotes
+  # and rendered only when reply-linked to a network note.
+  defp secondary_hop([]), do: []
+
+  defp secondary_hop(_follow_pubkeys) do
+    case Profile.get_my_profile() do
+      {:ok, profile} ->
+        Profile.second_hop_pubkeys(profile.pubkey, Application.get_env(:mist, :second_hop_cap, 300))
+
+      _ ->
+        []
+    end
+  end
 
   defp reload_notes_for_filter(socket) do
     notes =
@@ -279,7 +329,9 @@ defmodule MistWeb.NoteLive.Index do
         pubkeys ->
           pubkeys
           |> MapSet.to_list()
-          |> Notes.list_conversations(lookback_since(socket.assigns.lookback_seconds))
+          |> Notes.list_conversations(lookback_since(socket.assigns.lookback_seconds),
+            secondary_pubkeys: MapSet.to_list(socket.assigns.secondary_pubkeys)
+          )
           |> GraphUpdater.from_notes()
       end
 
@@ -457,18 +509,71 @@ defmodule MistWeb.NoteLive.Index do
     push_event(socket, "update_note_counts", %{note_id: note_id, counts: counts})
   end
 
+  # The list view is the follows' feed: network authors only (secondary-hop
+  # notes live in the graph, not the list). Flat sources (nil source set)
+  # show everything the subscription delivers, as before. Inserts are
+  # batched (like the graph) via the shared 250ms timer: one diff per batch
+  # instead of one per event, so relay backfill floods don't flood the
+  # LiveView with renders.
+  defp maybe_stream_note(socket, note) do
+    if in_scope?(socket.assigns, note.pubkey) do
+      socket
+      |> update(:pending_stream_notes, &[note | &1])
+      |> arm_batch_timer()
+    else
+      socket
+    end
+  end
+
+  # Insert the batch oldest-first with at: 0 so the newest note ends up on
+  # top and the batch lands roughly chronological. Stream inserts of an
+  # existing dom_id move the item — dedup keeps relay copies from
+  # re-inserting (P1 suppresses duplicate broadcasts; this guards against
+  # re-delivery after a stream reset).
+  defp flush_pending_stream_notes(%{assigns: %{pending_stream_notes: []}} = socket), do: socket
+
+  defp flush_pending_stream_notes(socket) do
+    notes =
+      socket.assigns.pending_stream_notes
+      |> Enum.reverse()
+      |> Enum.uniq_by(& &1.id)
+      |> Enum.sort_by(& &1.created_at, :asc)
+
+    Enum.reduce(notes, socket, &stream_insert(&2, :notes, &1, at: 0))
+    |> assign(:pending_stream_notes, [])
+  end
+
   # The graph only shows conversations from the current network source and
   # inside the lookback window: drop live notes from outside the source
   # pubkey set or older than the window (relay backfill delivers far more
   # history than the view covers), and let GraphUpdater hold anything that
-  # doesn't (yet) join a conversation.
+  # doesn't (yet) join a conversation. Secondary-hop authors pass only when
+  # their note is reply-anchored to a network note.
   defp maybe_queue_graph_update(socket, note) do
-    if in_scope?(socket.assigns, note.pubkey) and in_window?(socket.assigns, note) do
+    in_graph_scope =
+      in_scope?(socket.assigns, note.pubkey) or anchored_secondary?(socket.assigns, note)
+
+    if in_graph_scope and in_window?(socket.assigns, note) do
       socket
       |> queue_reply_parents(note)
       |> queue_graph_update(note)
     else
       socket
+    end
+  end
+
+  # A secondary-authored note joins the graph only when it replies to a
+  # network-authored note (which is persisted on arrival, so a DB lookup
+  # settles it). The reverse case — a network note replying to a secondary
+  # parent — is handled by queue_reply_parents when the network note arrives.
+  # Only called when a source set exists (flat sources short-circuit in
+  # maybe_queue_graph_update via in_scope?).
+  defp anchored_secondary?(%{source_pubkeys: network, secondary_pubkeys: secondary}, note) do
+    if MapSet.member?(secondary, note.pubkey) do
+      ids = parent_ids(note.tags)
+      ids != [] and Notes.by_event_ids(ids, MapSet.to_list(network)) != []
+    else
+      false
     end
   end
 
@@ -481,9 +586,20 @@ defmodule MistWeb.NoteLive.Index do
   defp in_scope?(%{source_pubkeys: nil}, _pubkey), do: true
   defp in_scope?(%{source_pubkeys: set}, pubkey), do: MapSet.member?(set, pubkey)
 
+  # Non-mention "e" tag values of a note: the notes it replies to.
+  defp parent_ids(tags) do
+    for %{type: "e", data: id, info: info} <- tags,
+        is_binary(id) and id != "",
+        "mention" not in info,
+        uniq: true,
+        do: id
+  end
+
   # If the note replies to parents we don't have in the graph (or held),
   # fetch in-network parents from the DB and queue them first, so the
-  # conversation can form.
+  # conversation can form. Secondary-authored parents count too — a network
+  # note replying to a second-hop note brings that parent into the graph,
+  # anchored by construction.
   defp queue_reply_parents(socket, note) do
     known_ids =
       MapSet.new(socket.assigns.graph_data.nodes, & &1.id)
@@ -503,7 +619,11 @@ defmodule MistWeb.NoteLive.Index do
 
       parents =
         if source_pubkeys do
-          Notes.by_event_ids(missing_parent_ids, MapSet.to_list(source_pubkeys))
+          authors =
+            MapSet.union(source_pubkeys, socket.assigns.secondary_pubkeys)
+            |> MapSet.to_list()
+
+          Notes.by_event_ids(missing_parent_ids, authors)
         else
           []
         end
@@ -514,8 +634,12 @@ defmodule MistWeb.NoteLive.Index do
 
   defp queue_graph_update(socket, note) do
     pending = GraphUpdater.queue(socket.assigns.pending_graph_updates, note)
-    socket = assign(socket, :pending_graph_updates, pending)
+    socket
+    |> assign(:pending_graph_updates, pending)
+    |> arm_batch_timer()
+  end
 
+  defp arm_batch_timer(socket) do
     if socket.assigns.batch_timer_ref == nil do
       timer_ref = Process.send_after(self(), :process_graph_batch, 250)
       assign(socket, :batch_timer_ref, timer_ref)

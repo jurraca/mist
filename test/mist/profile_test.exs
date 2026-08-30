@@ -429,6 +429,31 @@ defmodule Mist.ProfileTest do
       assert stub.relay == "wss://hint.example.com"
     end
 
+    test "mixed tags with and without relay hints insert cleanly" do
+      # Real kind-3 events mix p-tags carrying relay hints with bare ones.
+      # Heterogeneous insert_all rows crash ecto_sqlite3 (no cell-wise
+      # defaults), so this is a regression guard for that exact shape.
+      follower = profile_fixture()
+      hinted_pubkey = unique_pubkey()
+      bare_pubkey = unique_pubkey()
+
+      tags = [
+        %NostrCore.Tag{type: "p", data: hinted_pubkey, info: ["wss://hint.example.com", "alice"]},
+        %NostrCore.Tag{type: "p", data: bare_pubkey, info: []}
+      ]
+
+      assert :ok = Profile.add_follow_list(follower.pubkey, tags)
+
+      {:ok, hinted} = Profile.get_by_pubkey(hinted_pubkey)
+      assert hinted.relay == "wss://hint.example.com"
+
+      {:ok, bare} = Profile.get_by_pubkey(bare_pubkey)
+      assert is_nil(bare.relay)
+
+      follows = Repo.all(from f in Mist.Profile.Follows, where: f.follower_id == ^follower.id)
+      assert length(follows) == 2
+    end
+
     test "relay hint does not overwrite an existing profile's relay field" do
       follower = profile_fixture()
       existing_relay = "wss://original.example.com"
@@ -609,6 +634,65 @@ defmodule Mist.ProfileTest do
       result = Profile.get_write_relays_by_relay([profile])
       assert Map.has_key?(result, "wss://write-relay.example.com")
       assert pubkey in result["wss://write-relay.example.com"]
+    end
+  end
+
+  describe "second_hop_pubkeys/2" do
+    test "returns follows-of-follows ranked by follower count among my follows" do
+      me = profile_fixture()
+      a = profile_fixture()
+      b = profile_fixture()
+      x = profile_fixture()
+      y = profile_fixture()
+
+      # me -> A, B. A and B both follow X; only A follows Y.
+      follows_fixture(me.pubkey, a.pubkey)
+      follows_fixture(me.pubkey, b.pubkey)
+      follows_fixture(a.pubkey, x.pubkey)
+      follows_fixture(b.pubkey, x.pubkey)
+      follows_fixture(a.pubkey, y.pubkey)
+
+      assert Profile.second_hop_pubkeys(me.pubkey, 300) == [x.pubkey, y.pubkey]
+    end
+
+    test "excludes direct follows and the identity itself" do
+      me = profile_fixture()
+      direct = profile_fixture()
+      second = profile_fixture()
+
+      follows_fixture(me.pubkey, direct.pubkey)
+      # A follow of mine follows my direct follow — still direct, excluded.
+      follows_fixture(direct.pubkey, second.pubkey)
+      follows_fixture(me.pubkey, second.pubkey)
+      # A follow of mine follows me back — I must not be in my own second hop.
+      follows_fixture(direct.pubkey, me.pubkey)
+
+      assert Profile.second_hop_pubkeys(me.pubkey, 300) == []
+    end
+
+    test "caps the result size" do
+      me = profile_fixture()
+      a = profile_fixture()
+      follows_fixture(me.pubkey, a.pubkey)
+
+      second_hoppers = for _ <- 1..5, do: profile_fixture()
+      Enum.each(second_hoppers, &follows_fixture(a.pubkey, &1.pubkey))
+
+      assert length(Profile.second_hop_pubkeys(me.pubkey, 3)) == 3
+    end
+
+    test "cap of zero disables the feature" do
+      me = profile_fixture()
+      a = profile_fixture()
+      x = profile_fixture()
+      follows_fixture(me.pubkey, a.pubkey)
+      follows_fixture(a.pubkey, x.pubkey)
+
+      assert Profile.second_hop_pubkeys(me.pubkey, 0) == []
+    end
+
+    test "unknown identity returns empty list" do
+      assert Profile.second_hop_pubkeys(unique_pubkey(), 300) == []
     end
   end
 end

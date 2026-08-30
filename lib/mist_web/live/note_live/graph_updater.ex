@@ -70,12 +70,25 @@ defmodule MistWeb.NoteLive.GraphUpdater do
     %{graph | nodes: nodes}
   end
 
+  # Merge profile data (author/picture) into every node by this pubkey.
+  # Nil values never clobber what a node already has.
+  def update_profile(graph, pubkey, profile) do
+    update = Map.reject(profile, fn {_, v} -> is_nil(v) end)
+
+    nodes = Enum.map(graph.nodes, fn n ->
+      if n.pubkey == pubkey, do: Map.merge(n, update), else: n
+    end)
+
+    %{graph | nodes: nodes}
+  end
+
   # Full content is kept in the payload: the graph no longer renders text
   # previews next to nodes; the hover sidebar displays the complete note.
   def build_node(note) do
     %{
       id: note.id, pubkey: note.pubkey,
       author: Map.get(note, :author),
+      picture: Map.get(note, :picture),
       content: note.content || "",
       type: "note", created_at: note.created_at,
       reaction_count: Map.get(note, :reaction_count, 0),

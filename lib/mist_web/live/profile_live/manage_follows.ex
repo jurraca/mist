@@ -240,6 +240,9 @@ defmodule MistWeb.ProfileLive.ManageFollows do
       {:ok, _event} ->
         {:noreply, put_flash(socket, :info, "Published follow list to relays")}
 
+      {:error, reason, _failures} ->
+        {:noreply, put_flash(socket, :error, "Failed to publish: #{inspect(reason)}")}
+
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Failed to publish: #{inspect(reason)}")}
     end

@@ -57,8 +57,8 @@ defmodule Mist.MixProject do
       {:gettext, "~> 0.26"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
-      {:bandit, "~> 1.5"},
-      {:nostr_ex, github: "jurraca/nostr_ex"},
+      {:bandit, "~> 1.12.5"},
+      {:nostr_ex, path: "../nostr_ex"},
       {:nostr_core, github: "jurraca/nostr_core"}
     ]
   end

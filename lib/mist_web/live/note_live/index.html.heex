@@ -1,4 +1,4 @@
-<div class="h-full flex flex-col">
+<div class="flex-1 min-h-0 flex flex-col">
   <!-- Toolbar -->
   <div class="flex items-center gap-4 flex-wrap px-4 py-2 bg-dark-secondary border-b border-dark-border">
     <!-- Subscription Filter Dropdown -->
@@ -93,100 +93,75 @@
     </.link>
   </div>
 
-  <!-- List view -->
-  <div :if={@view_mode == :list} class="flex-1 min-h-0 overflow-y-auto">
+  <!-- List view. Always in the DOM (hidden via CSS when in graph mode):
+      the notes stream must have its container present at mount so the
+      initial DB-loaded items render, and stream inserts from the 250ms
+      batch flush always have a target even while the graph is showing.
+      Unlike the graph view, this side is fully server-managed — no
+      phx-update="ignore" — so LiveView can safely toggle its class. -->
+  <div class={["flex-1 min-h-0 overflow-y-auto", @view_mode != :list && "hidden"]}>
     <div class="mx-auto max-w-4xl px-4 py-8">
       <div :if={@notes_empty_message} class="text-center py-16 text-text-muted">
         <p class="text-sm">{@notes_empty_message}</p>
       </div>
 
-      <div id="notes" phx-update="stream" phx-hook="NoteCountUpdater" class="space-y-4">
+      <div id="notes" phx-update="stream" phx-hook="NoteCountUpdater" class="space-y-3">
         <div :for={{dom_id, note} <- @streams.notes} id={dom_id} class="note-card">
-          <div class="space-y-3">
-            <div class="flex items-start justify-between">
-              <div class="flex-1 space-y-2">
-                <div class="flex items-center gap-3">
-                  <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
-                    Author
-                  </span>
-                  <code id={"pubkey-#{note.id}"} class="pubkey text-xs bg-dark-tertiary px-2 py-1 rounded">
-                    <%= if note.author do %>
-                      {note.author}
-                    <% else %>
-                      {String.slice(note.pubkey, 0, 12)}...
-                    <% end %>
-                  </code>
-                  <span class="hidden" id={"pubkey-full-#{note.id}"}>{note.pubkey}</span>
-                  <button
-                    id={"copy-pubkey-#{note.id}"}
-                    phx-hook="Copy"
-                    data-to={"#pubkey-full-#{note.id}"}
-                    class="text-xs text-text-muted border-none p-2 hover:text-neon-green transition-colors cursor-pointer"
-                    title="Copy pubkey"
-                  >
-                    <.icon name="hero-document-duplicate-mini"/>
-                  </button>
+          <div class="flex items-start gap-3">
+            <div class="shrink-0">
+              <%= if note.picture do %>
+                <img src={note.picture} referrerpolicy="no-referrer" class="w-10 h-10 rounded-full object-cover" alt="" />
+              <% else %>
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-neon-green to-neon-purple flex items-center justify-center text-dark-primary font-bold text-sm shrink-0">
+                  {(note.author || "?") |> String.slice(0, 1) |> String.upcase()}
                 </div>
-                <div class="flex items-center gap-3">
-                  <%= if note.bot do %>
-                    <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
-                      bot account 🤖
-                    </span>
+              <% end %>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline gap-2 mb-1">
+                <span class="text-sm font-medium text-neon-green truncate">{note.author || String.slice(note.pubkey, 0, 12)}</span>
+                <span class="text-xs text-text-muted font-mono shrink-0">
+                  <%= if note.created_at do %>
+                    {note.created_at}
+                  <% else %>
+                    Just now
                   <% end %>
-                </div>
+                </span>
               </div>
-              <div class="text-xs text-text-muted font-mono">
-                <%= if note.created_at do %>
-                  {note.created_at}
-                <% else %>
-                  Just now
+              <%= if note.reply_to do %>
+                <div class="flex items-center gap-1.5 text-xs text-text-muted mb-1">
+                  <span>↩ replying to</span>
+                  <a
+                    href={"https://njump.me/#{note.reply_to}"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={note.reply_to}
+                    class="text-neon-green hover:underline font-mono"
+                  >
+                    {String.slice(note.reply_to, 0, 10)}…
+                  </a>
+                </div>
+              <% end %>
+              <%!-- Server renders plain text as a safe fallback; the
+                  NoteContent hook enhances it client-side with the same
+                  link/image/entity rendering the sidebar uses. --%>
+              <p
+                id={"note-content-#{note.id}"}
+                phx-hook="NoteContent"
+                data-content={note.content}
+                class="text-text-primary text-sm leading-relaxed whitespace-pre-wrap break-words space-y-2"
+              >{note.content}</p>
+              <div class="flex items-center gap-4 text-xs text-text-muted mt-2 interaction-stats">
+                <%= if Map.get(note, :reaction_count, 0) > 0 do %>
+                  <span>❤️ {Map.get(note, :reaction_count, 0)}</span>
+                <% end %>
+                <%= if Map.get(note, :boost_count, 0) > 0 do %>
+                  <span>🔄 {Map.get(note, :boost_count, 0)}</span>
+                <% end %>
+                <%= if Map.get(note, :zap_amount, 0) > 0 do %>
+                  <span class="text-yellow-400">⚡ {Map.get(note, :zap_amount, 0)} sats</span>
                 <% end %>
               </div>
-            </div>
-
-            <div class="note-content bg-dark-tertiary rounded-lg p-2 border border-dark-border">
-              <p class="text-text-primary leading-2 p-2">{note.content}</p>
-            </div>
-
-            <!-- Interaction Stats -->
-            <div class="flex items-center gap-4 text-xs text-text-muted interaction-stats">
-              <%= if Map.get(note, :reaction_count, 0) > 0 do %>
-                <div class="flex items-center gap-1">
-                  <span>❤️</span>
-                  <span>{Map.get(note, :reaction_count, 0)}</span>
-                </div>
-              <% end %>
-              <%= if Map.get(note, :boost_count, 0) > 0 do %>
-                <div class="flex items-center gap-1">
-                  <span>🔄</span>
-                  <span>{Map.get(note, :boost_count, 0)}</span>
-                </div>
-              <% end %>
-              <%= if Map.get(note, :zap_amount, 0) > 0 do %>
-                <div class="flex items-center gap-1">
-                  <span class="text-yellow-400">⚡</span>
-                  <span class="text-yellow-400">{Map.get(note, :zap_amount, 0)} sats</span>
-                </div>
-              <% end %>
-            </div>
-
-            <div class="flex items-center gap-3">
-              <span class="text-xs text-text-muted uppercase tracking-wider">
-                event ID
-              </span>
-              <code id={"note-id-#{note.id}"} class="note-id text-xs bg-dark-tertiary px-2 py-1 rounded">
-                {String.slice(note.id, 0, 12)}...
-              </code>
-              <span class="hidden" id={"note-full-id-#{note.id}"}>{note.id}</span>
-              <button
-                id={"copy-note-id-#{note.id}"}
-                phx-hook="Copy"
-                data-to={"#note-full-id-#{note.id}"}
-                class="text-xs text-text-muted border-none p-2 hover:text-neon-green transition-colors cursor-pointer"
-                title="Copy event ID"
-              >
-                <.icon name="hero-document-duplicate-mini"/>
-              </button>
             </div>
           </div>
         </div>
@@ -194,8 +169,10 @@
     </div>
   </div>
 
-  <!-- Graph view: fills the remaining viewport; the rightmost column shows
-      the hovered note's full content (client-side, no server roundtrip). -->
+  <!-- Graph view: fills the remaining viewport; the right column is a static
+      sidebar that renders the hovered/pinned note client-side. The sidebar
+      is phx-update="ignore" so LiveView never resets its JS-toggled state,
+      and has a FIXED width so its content can never resize the graph. -->
   <div :if={@view_mode == :graph} class="flex-1 min-h-0 flex">
     <%!-- phx-update="ignore": the graph's DOM is owned by d3. Without this,
         any server re-render would patch this (server-side empty) container
@@ -208,21 +185,36 @@
     >
     </div>
 
-    <aside class="w-1/5 min-w-[240px] border-l border-dark-border bg-dark-secondary overflow-y-auto">
+    <aside id="graph-sidebar" phx-update="ignore" class="w-[360px] shrink-0 border-l border-dark-border bg-dark-secondary overflow-y-auto">
       <div class="p-4">
-        <p id="graph-sidebar-placeholder" class="text-sm text-text-muted">
-          Hover a node to read the note.
-        </p>
-        <div id="graph-sidebar-content" class="hidden space-y-3">
-          <div class="flex items-center justify-between gap-2">
-            <span id="graph-sidebar-author" class="text-xs font-medium text-neon-green uppercase tracking-wider truncate"></span>
-            <span id="graph-sidebar-time" class="text-xs text-text-muted font-mono whitespace-nowrap"></span>
+        <div id="graph-sidebar-content">
+          <p id="graph-sidebar-placeholder" class="text-sm text-text-muted">
+            Hover a node to read the note.
+          </p>
+          <div id="graph-sidebar-single" class="hidden space-y-3">
+            <div class="flex items-center gap-3">
+              <img
+                id="graph-sidebar-avatar"
+                class="hidden w-10 h-10 rounded-full object-cover bg-dark-tertiary border border-dark-border"
+                alt=""
+                referrerpolicy="no-referrer"
+              />
+              <div
+                id="graph-sidebar-avatar-placeholder"
+                class="w-10 h-10 rounded-full bg-gradient-to-br from-neon-green to-neon-purple flex items-center justify-center text-dark-primary font-bold shrink-0"
+              ></div>
+              <div class="min-w-0">
+                <div id="graph-sidebar-author" class="text-sm font-medium text-neon-green truncate"></div>
+                <div id="graph-sidebar-time" class="text-xs text-text-secondary font-mono"></div>
+              </div>
+            </div>
+            <div class="bg-dark-tertiary rounded-lg p-3 border border-dark-border">
+              <div id="graph-sidebar-body" class="text-text-primary text-sm leading-relaxed whitespace-pre-wrap break-words space-y-2"></div>
+            </div>
+            <div id="graph-sidebar-stats" class="flex items-center gap-4 text-xs text-text-muted"></div>
+            <code id="graph-sidebar-id" class="block text-xs text-text-muted"></code>
           </div>
-          <div class="bg-dark-tertiary rounded-lg p-3 border border-dark-border">
-            <p id="graph-sidebar-body" class="text-text-primary text-sm leading-relaxed whitespace-pre-wrap break-words"></p>
-          </div>
-          <div id="graph-sidebar-stats" class="flex items-center gap-4 text-xs text-text-muted"></div>
-          <code id="graph-sidebar-id" class="block text-xs text-text-muted"></code>
+          <div id="graph-sidebar-thread" class="hidden space-y-2"></div>
         </div>
       </div>
     </aside>

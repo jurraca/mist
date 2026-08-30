@@ -61,6 +61,16 @@ config :mist, MistWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :mist, dev_routes: true
 
+# Cap feed relays in dev to avoid connecting to hundreds of dead relays
+config :mist, max_feed_relays: 12
+
+# Disable FindUserRelays job during development
+config :mist, skip_find_user_relays: true
+
+# Second hop of the follow graph: fetch notes authored by profiles my follows
+# follow (ranked, capped). 0 disables second-hop fetching entirely.
+config :mist, second_hop_cap: 300
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"
 

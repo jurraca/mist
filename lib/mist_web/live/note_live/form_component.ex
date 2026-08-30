@@ -72,6 +72,14 @@ defmodule MistWeb.NoteLive.FormComponent do
            |> put_flash(:warning, "Note saved locally but relay broadcast failed: #{inspect(reason)}")
            |> push_patch(to: socket.assigns.patch)}
 
+        {:ok, event_map, {:error, failures}} ->
+          notify_parent({:saved, event_map})
+
+          {:noreply,
+           socket
+           |> put_flash(:warning, "Note saved locally but all relays rejected it: #{inspect(failures)}")
+           |> push_patch(to: socket.assigns.patch)}
+
         {:ok, event_map} ->
           notify_parent({:saved, event_map})
 
